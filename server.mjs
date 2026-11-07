@@ -8,8 +8,8 @@ import { DatabaseSync } from 'node:sqlite';
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
 const password = process.env.APP_PASSWORD;
 const secret = process.env.SESSION_SECRET;
-if (!password || password.length < 12 || !secret || secret.length < 32) {
-  console.error('Missing APP_PASSWORD (12+ chars) or SESSION_SECRET (32+ chars)');
+if (!password || password.length < 8 || !secret || secret.length < 32) {
+  console.error('Missing APP_PASSWORD (8+ chars) or SESSION_SECRET (32+ chars)');
   process.exit(1);
 }
 mkdirSync(dataDir, { recursive: true });
