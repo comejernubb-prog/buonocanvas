@@ -175,7 +175,19 @@
     #groupBtn,#ungroupBtn{font-size:10px;min-width:45px}#groupBtn:disabled,#ungroupBtn:disabled{opacity:.35;cursor:default}
     #drawing [data-arrow-handle]{cursor:crosshair}
     @media(max-width:720px){.connector-tip{display:none}.connector-bar{top:91px}.connector-kicker{font-size:8px}}
-  </style>
+  
+/* v8 Cloud collaboration — Swiss-style monochrome shell */
+.cloud-shield{position:fixed;inset:0;background:#f7f7f6;z-index:80;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Prompt,Arial,sans-serif;color:#262626}
+.cloud-shield.hidden{display:none}.cloud-signin{width:min(420px,100%);background:#fff;border:1px solid #e5e5e5;box-shadow:0 20px 70px #00000012;border-radius:18px;padding:34px}
+.cloud-kicker{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#888;font-weight:600}.cloud-signin h1{font-weight:500;font-size:32px;letter-spacing:-1.5px;margin:14px 0 8px}.cloud-signin p{font-size:12px;line-height:1.8;color:#888;margin:0 0 23px}.cloud-signin label{font-size:10px;color:#666;font-weight:600;display:block;margin:12px 0 6px}
+.cloud-signin input{width:100%;border:1px solid #ddd;border-radius:8px;background:#fafafa;color:#222;padding:13px 11px;outline:none;font:400 13px Prompt,Arial,sans-serif}.cloud-signin input:focus{border-color:#333;background:white}
+.cloud-signin button{width:100%;margin-top:22px;background:#242424;color:white;border:0;border-radius:8px;padding:13px;cursor:pointer;font:500 12px Prompt,Arial,sans-serif}
+.cloud-message{min-height:18px;font-size:11px;margin-top:14px;color:#d15437}.cloud-footer{margin-top:22px;font-size:10px;color:#aaa;display:flex;justify-content:space-between}
+.cloud-online{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid #e7e7e7;border-radius:8px;color:#555;font:500 10px Prompt,Arial,sans-serif;padding:5px 8px;cursor:pointer;white-space:nowrap}.cloud-online .live-dot{width:6px;height:6px;border-radius:50%;background:#f14b3b;display:inline-block}.cloud-online.connected .live-dot{background:#3ba776}
+.cloud-online small{font-size:9px;color:#aaa}.remote-cursors{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:3}.remote-pointer{position:absolute;transform:translate(-3px,-3px);color:#ec6426;font-size:12px;white-space:nowrap}.remote-pointer .arrowhead{font-size:17px;color:#ec6426;display:inline-block}.remote-pointer span{margin-left:5px;color:white;background:#222;font-size:9px;padding:3px 6px;border-radius:4px}
+.cloud-shield.reconnecting .cloud-signin button{display:none}@media(max-width:650px){.cloud-signin{padding:25px}.cloud-online small{display:none}}
+
+</style>
 </head>
 <body>
 <div class="app">
@@ -186,6 +198,7 @@
       <div><div class="brand">buono<span>canvas</span></div><div class="brand-sub">A CREATIVE SPACE BY BUONO</div></div>
     </div>
     <div class="header-right">
+      <button class="cloud-online" id="cloudIndicator" type="button" title="Cloud collaboration · sign out"> <span class="live-dot"></span><span id="cloudPeople">Cloud offline</span><small id="cloudSyncLabel">Sync</small></button>
       <button class="btn" id="importBtn" title="Open a JSON board"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V3m0 13-4-4m4 4 4-4M4 16v4h16v-4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="hide-mobile">Open</span></button>
       <button class="header-icon-btn" id="inspectorToggle" title="Show / hide properties" aria-label="Toggle properties" aria-controls="inspector" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2" fill="white"/><circle cx="16" cy="12" r="2.2" fill="white"/><circle cx="11" cy="18" r="2.2" fill="white"/></svg></button>
       <button class="btn" id="exportBtn" title="Export to image, PDF or JSON"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v13m0 0-5-5m5 5 5-5M4 17v4h16v-4" stroke-linecap="round" stroke-linejoin="round"/></svg>Export</button>
@@ -198,13 +211,13 @@
       <button class="sidebar-new" id="newBoardBtn"><span style="font-size:18px;line-height:0">+</span> New canvas</button>
       <div><div class="section-label" style="margin-bottom:12px">YOUR CANVASES</div><div class="boards" id="boardList"></div></div>
       <div class="brand-card"><div class="brand-card-title">LESS, BUT BETTER.</div><div class="brand-card-copy">Create freely. Keep the interface quiet.</div><div class="brand-swatches"><span style="background:#EC6426"></span><span style="background:#F8A91F"></span><span style="background:#FDE3CF"></span><span style="background:#c78665"></span></div></div>
-      <div class="sidebar-foot"><span>BUONO DESIGN STUDIO</span><span>v 6.0</span></div>
+      <div class="sidebar-foot"><span>BUONO DESIGN STUDIO</span><span>v 8.0 · CLOUD</span></div>
     </aside>
     <section class="stage-wrap" id="stageWrap">
-      <div class="stage" id="stage">
+      <div class="stage" id="stage"><div id="remoteCursors" class="remote-cursors" aria-hidden="true"></div>
         <svg id="drawing" class="tool-selection" xmlns="http://www.w3.org/2000/svg" aria-label="Drawing canvas"></svg>
         <div class="stage-hint">Wheel zoom · Middle-drag pan · Ctrl+G group · Alt+G ungroup · Arrow connectors support 2 bends</div>
-        <div class="status-floating" role="status"><span class="status-dot"></span><span id="saveLabel">Saved locally</span></div>
+        <div class="status-floating" role="status"><span class="status-dot"></span><span id="saveLabel">Connecting…</span></div>
         <div class="canvas-label">INFINITE CANVAS · <span id="elementCount">0 ELEMENTS</span></div>
         <div class="zoom-panel"><button id="zoomOut" title="Zoom out">−</button><span id="zoomValue" class="zoom-text">100%</span><button id="zoomIn" title="Zoom in">+</button><button id="zoomFit" title="Fit to drawing" style="font-size:14px">⊡</button></div>
       </div>
@@ -263,6 +276,14 @@
 <div id="imageMenu" class="context-menu" role="menu"><button type="button" id="saveImageBtn">↓ &nbsp;Save as image (PNG)</button><button type="button" id="removeImageBtn">× &nbsp;Remove image</button></div>
 <input id="jsonInput" type="file" accept="application/json,.json,.buonocanvas,.excalidraw" hidden />
 <input id="imageInput" type="file" accept="image/*" hidden />
+<div id="cloudGate" class="cloud-shield"><form id="cloudLogin" class="cloud-signin">
+  <div class="cloud-kicker">BUONO DESIGN STUDIO / CLOUD</div><h1>buonocanvas.</h1>
+  <p>A shared infinite canvas, live across Windows, Mac and iPad.<br/>Enter your workspace access code to collaborate.</p>
+  <label for="cloudName">DISPLAY NAME</label><input id="cloudName" type="text" autocomplete="nickname" maxlength="38" placeholder="Your name" required />
+  <label for="cloudPassword">WORKSPACE ACCESS CODE</label><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Access code" required />
+  <button id="cloudLoginButton" type="submit">Enter creative space →</button><div id="cloudMessage" class="cloud-message" aria-live="polite"></div>
+  <div class="cloud-footer"><span>BUONOCANVAS 8.0</span><span>SECURE CLOUD WORKSPACE</span></div>
+</form></div>
 <script>
 (() => {
 'use strict';
@@ -300,13 +321,137 @@ const seed=()=>{ const elements=[
  s('text',840,304,211,25,'#FFFFFF','transparent',{text:'Export · share · build',fontSize:13,rough:0}),
  s('text',110,463,690,20,'#999999','transparent',{text:'BUONO DESIGN STUDIO  /  INFINITE CANVAS',fontSize:14,rough:0})
 ];return {id:genId(),name:'Welcome to buonocanvas',updatedAt:now(),elements,pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false};};
-let store;try{store=JSON.parse(localStorage.getItem(KEY));}catch(e){};
-if(!store||!Array.isArray(store.docs)||!store.docs.length) {const first=seed();store={docs:[first],currentId:first.id};}
-store.docs.forEach(d=>{if(d.background==='#fffaf6')d.background='#FFFFFF';});
+// Cloud-only state; old browser-only boards intentionally are not imported.
+let store={docs:[{id:'bootstrap',name:'Connecting to cloud…',updatedAt:now(),elements:[],pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false}],currentId:'bootstrap'};
 let state={...store,anchorHover:null,activeAnchor:null,tool:'selection',selected:[],gesture:null,guides:[],space:false,clipboard:[],pasteSerial:0,history:[],future:[],defaultStyle:{stroke:COLOR.black,fill:'transparent',strokeWidth:2.5,opacity:100,dash:'solid',rough:0,fontSize:24},drawing:false};
 const doc=()=>state.docs.find(x=>x.id===state.currentId)||state.docs[0];
 let savedTimer=null,toastTimer=null,editor=null,raf=0;
-function persist(){ $('#saveLabel').textContent='Saving…';clearTimeout(savedTimer);savedTimer=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify({docs:state.docs,currentId:state.currentId}));$('#saveLabel').textContent='Saved locally';}catch(err){$('#saveLabel').textContent='Storage full';showToast('Local storage is full — export this canvas as JSON.');}},260);}
+const cloud={ready:false,online:false,actor:'',socket:null,known:new Map(),inFlight:null,flushTimer:null,retryTimer:null,queueStamp:0,locks:new Map(),localLocks:new Set(),remoteCursors:new Map(),members:[],lastCursor:0,requestId:0};
+const objectEqual=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+function cleanElement(el){if(!el)return null;const v=deep(el);delete v._rev;return v;}
+function showCloudStatus(status){const tag=$('#saveLabel'),indicator=$('#cloudIndicator'),label=$('#cloudPeople');indicator.classList.toggle('connected',cloud.ready&&cloud.online);label.textContent=cloud.ready&&cloud.online?`${cloud.members.length||1} online`:'Cloud offline';if(status)tag.textContent=status;$('#cloudSyncLabel').textContent=cloud.ready&&cloud.online?'Live':'Offline';}
+function cloudGateway(message='',mode='login'){
+ const gate=$('#cloudGate');gate.classList.remove('hidden');gate.classList.toggle('reconnecting',mode==='reconnecting');$('#cloudMessage').textContent=message;
+ $('#cloudLoginButton').disabled=mode==='reconnecting';
+ if(mode==='reconnecting'){$('#cloudLoginButton').textContent='Reconnecting…';}
+ else{$('#cloudLoginButton').textContent='Enter creative space →';}
+}
+function wsSend(obj){if(!cloud.socket||cloud.socket.readyState!==WebSocket.OPEN)return false;cloud.socket.send(JSON.stringify(obj));return true;}
+function cloudKnown(id){return cloud.known.get(id);}
+function cloudRefreshFromServer(boards){
+ const previous=doc();const localViews=new Map(state.docs.map(d=>[d.id,{pan:d.pan,zoom:d.zoom}]));
+ cloud.known.clear();for(const d of boards)cloud.known.set(d.id,deep(d));
+ let docs=boards.map(d=>({...deep(d),pan:localViews.get(d.id)?.pan||{x:0,y:0},zoom:localViews.get(d.id)?.zoom||1,updatedAt:d.updatedAt||now()}));
+ if(!docs.length){const id=genId(),first={id,name:'Untitled canvas',background:'#FFFFFF',grid:false,elements:[],pan:{x:0,y:0},zoom:1,updatedAt:now()};docs=[first];}
+ state.docs=docs;state.currentId=docs.find(d=>d.id===state.currentId)?.id||docs[0].id;
+ state.selected=[];state.gesture=null;state.history=[];state.future=[];sessionHistories.clear();
+ cloud.inFlight=null;renderAll();cloudSchedule(0);
+}
+function cloudSchedule(delay=160){if(!cloud.ready||!cloud.online)return;clearTimeout(cloud.flushTimer);cloud.flushTimer=setTimeout(cloudFlush,delay);showCloudStatus('Syncing…');}
+function cloudFlush(){if(!cloud.ready||!cloud.online||cloud.inFlight)return;
+ const docs=state.docs,ids=new Set(docs.map(d=>d.id));
+ for(const [id,remote] of cloud.known){if(!ids.has(id)){
+   const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'boardDelete',boardId:id};
+   wsSend({type:'boardDelete',reqId,boardId:id,baseRev:remote.revision});return;
+ }}
+ for(const d of docs){if(!cloud.known.has(d.id)){
+   const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'boardCreate',boardId:d.id};
+   wsSend({type:'boardCreate',reqId,board:{id:d.id,name:d.name,background:d.background,grid:!!d.grid}});return;
+ }}
+ for(const d of docs){const remote=cloud.known.get(d.id);if(!remote)continue;
+   const existing=new Map((remote.elements||[]).map(x=>[x.id,x])),current=new Map(d.elements.map(x=>[x.id,x]));
+   const edits=[];
+   for(const [id,obj] of current){const origin=existing.get(id);if(!origin||!objectEqual(cleanElement(origin),cleanElement(obj)))edits.push({id,baseRev:origin?origin._rev||0:0,value:cleanElement(obj)});}
+   for(const [id,obj] of existing)if(!current.has(id))edits.push({id,baseRev:obj._rev||0,value:null});
+   const meta=d.name!==remote.name||d.background!==remote.background||!!d.grid!==!!remote.grid?{name:d.name,background:d.background,grid:!!d.grid}:null;
+   if(edits.length||meta){const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'patch',boardId:d.id,ids:edits.map(x=>x.id)};
+     if(!wsSend({type:'patch',reqId,boardId:d.id,ops:edits,meta,baseMetaRev:remote.revision}))cloud.inFlight=null;
+     return;
+   }
+ }
+ showCloudStatus('Saved in cloud');
+}
+function cloudUnlock(){if(!cloud.localLocks.size)return;const byBoard=new Map();for(const key of cloud.localLocks){const [boardId,...parts]=key.split(':');const ids=byBoard.get(boardId)||[];ids.push(parts.join(':'));byBoard.set(boardId,ids);}cloud.localLocks.clear();for(const [boardId,ids]of byBoard)wsSend({type:'unlock',boardId,ids});}
+function cloudLock(ids,boardId=doc().id){if(!cloud.ready||!cloud.online||!ids?.length)return;
+ const selected=ids.filter(id=>id&&cloud.known.has(boardId)&&(cloud.known.get(boardId).elements||[]).some(x=>x.id===id));if(!selected.length)return;
+ for(const id of selected)cloud.localLocks.add(`${boardId}:${id}`);
+ wsSend({type:'lock',boardId,ids:selected});
+}
+function applyServerDelta(msg){let remote=cloud.known.get(msg.boardId);if(!remote)return;
+ let local=state.docs.find(d=>d.id===msg.boardId),received=new Set();
+ const previous=new Map(remote.elements.map(e=>[e.id,e]));
+ for(const op of msg.ops||[]){received.add(op.id);if(op.value===null)previous.delete(op.id);else previous.set(op.id,deep(op.value));}
+ remote.elements=[...previous.values()];if(msg.meta){remote.name=msg.meta.name;remote.background=msg.meta.background;remote.grid=msg.meta.grid;remote.revision=msg.meta.revision;}
+ const own=msg.sender===cloud.actor;
+ if(local){
+  if(!own){let byId=new Map(local.elements.map(e=>[e.id,e]));for(const op of msg.ops||[]){if(op.value===null)byId.delete(op.id);else byId.set(op.id,deep(op.value));}local.elements=[...byId.values()];if(msg.meta){local.name=msg.meta.name;local.background=msg.meta.background;local.grid=!!msg.meta.grid;}
+    // Collaboration-safe local Undo: snapshots may undo only this user's edits,
+    // never rewind or delete objects changed by a different participant.
+    const reconcile=stack=>{for(const snap of stack||[]){const m=new Map((snap.elements||[]).map(e=>[e.id,e]));for(const op of msg.ops||[]){if(op.value===null)m.delete(op.id);else m.set(op.id,deep(op.value));}snap.elements=[...m.values()];if(msg.meta){snap.name=msg.meta.name;snap.background=msg.meta.background;snap.grid=!!msg.meta.grid;}}};
+    if(state.currentId===msg.boardId){reconcile(state.history);reconcile(state.future);}
+    const session=sessionHistories.get(msg.boardId);if(session){reconcile(session.history);reconcile(session.future);}
+   }
+  else{for(const op of msg.ops||[]){if(op.value!==null){const v=local.elements.find(e=>e.id===op.id);if(v)v._rev=op.rev;}}}
+ }
+ if(cloud.inFlight?.reqId===msg.reqId&&own){cloud.inFlight=null;cloudSchedule(0);}
+ else if(!own&&cloud.inFlight?.boardId===msg.boardId&&cloud.inFlight.ids?.some(id=>received.has(id))){/* conflict will be rejected by server; do not overwrite remote */}
+ renderAll();
+}
+function cloudReceived(msg){
+ if(msg.type==='welcome'){
+  cloud.actor=msg.actor;cloud.ready=true;cloud.online=true;cloud.members=msg.users||[];
+  cloudRefreshFromServer(msg.boards||[]);$('#cloudGate').classList.add('hidden');showCloudStatus('Connected · Cloud ready');return;
+ }
+ if(msg.type==='presence'){cloud.members=msg.users||[];showCloudStatus();return;}
+ if(msg.type==='boardCreated'){
+  cloud.known.set(msg.board.id,deep(msg.board));
+  if(msg.sender!==cloud.actor&&!state.docs.some(d=>d.id===msg.board.id))state.docs.push({...deep(msg.board),pan:{x:0,y:0},zoom:1});
+  if(cloud.inFlight?.reqId===msg.reqId&&msg.sender===cloud.actor)cloud.inFlight=null;
+  renderAll();cloudSchedule(0);return;
+ }
+ if(msg.type==='boardDeleted'){
+  cloud.known.delete(msg.boardId);
+  if(msg.sender!==cloud.actor){state.docs=state.docs.filter(d=>d.id!==msg.boardId);if(state.currentId===msg.boardId&&state.docs.length)state.currentId=state.docs[0].id;}
+  if(cloud.inFlight?.reqId===msg.reqId&&msg.sender===cloud.actor)cloud.inFlight=null;
+  if(!state.docs.length)state.docs=[{id:genId(),name:'Untitled canvas',background:'#fff',grid:false,elements:[],pan:{x:0,y:0},zoom:1,updatedAt:now()}];
+  renderAll();cloudSchedule(0);return;
+ }
+ if(msg.type==='delta'){applyServerDelta(msg);return;}
+ if(msg.type==='rejected'){
+  cloud.inFlight=null;
+  const known=cloud.known.get(msg.boardId);
+  if(msg.snapshot){cloud.known.set(msg.boardId,deep(msg.snapshot));const local=state.docs.find(d=>d.id===msg.boardId);if(local){const view={pan:local.pan,zoom:local.zoom};Object.assign(local,deep(msg.snapshot),view);}}
+  else if(msg.boardId){cloud.known.delete(msg.boardId);state.docs=state.docs.filter(d=>d.id!==msg.boardId);}
+  state.gesture=null;state.selected=[];cloudUnlock();renderAll();showToast('Conflict: '+msg.reason+' · reloaded latest cloud version');showCloudStatus('Conflict resolved');cloudSchedule(250);return;
+ }
+ if(msg.type==='lockDenied'){
+  if(editor&&(msg.ids||[]).includes(editor.id)){editor.cancelled=true;finishEditor();}
+  if(state.gesture)state.gesture=null;cloudUnlock();showToast('This object is being edited on another device');
+  const last=cloud.known.get(msg.boardId);const local=state.docs.find(d=>d.id===msg.boardId);
+  if(last&&local){const v={pan:local.pan,zoom:local.zoom};Object.assign(local,deep(last),v);renderAll();}
+  return;
+ }
+ if(msg.type==='locks'){for(const id of msg.ids||[])cloud.locks.set(`${msg.boardId}:${id}`,msg.actor);return;}
+ if(msg.type==='unlock'){for(const id of msg.ids||[])cloud.locks.delete(`${msg.boardId}:${id}`);return;}
+ if(msg.type==='cursor'){cloud.remoteCursors.set(msg.actor,{...msg,time:Date.now()});drawRemoteCursors();return;}
+ if(msg.type==='error'){cloud.inFlight=null;showCloudStatus('Save error');showToast(msg.message||'Cloud server error');return;}
+}
+function drawRemoteCursors(){const panel=$('#remoteCursors');if(!panel||!cloud.ready)return;const active=[...cloud.remoteCursors.values()].filter(c=>c.actor!==cloud.actor&&c.boardId===doc().id&&Date.now()-c.time<8000);
+ panel.innerHTML=active.slice(0,15).map(c=>{const p=screenPoint(c.x,c.y);return `<div class="remote-pointer" style="left:${p.x}px;top:${p.y}px"><b class="arrowhead">⌖</b><span>${esc(c.name||'Collaborator')}</span></div>`;}).join('');}
+function sendCursor(e){const t=Date.now();if(!cloud.ready||t-cloud.lastCursor<80)return;cloud.lastCursor=t;const p=worldPoint(e);wsSend({type:'cursor',boardId:doc().id,x:p.x,y:p.y});}
+function cloudConnect(){
+ clearTimeout(cloud.retryTimer);cloudGateway('Connecting to shared workspace…','reconnecting');showCloudStatus('Connecting…');
+ const ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/ws');cloud.socket=ws;
+ ws.onopen=()=>{wsSend({type:'intro',name:localStorage.getItem('bc_display_name')||'Collaborator'});};
+ ws.onmessage=e=>{try{cloudReceived(JSON.parse(e.data));}catch(err){console.error('Cloud sync message',err);}};
+ ws.onerror=()=>{};
+ ws.onclose=async()=>{if(cloud.socket!==ws)return;cloud.online=false;cloud.ready=false;cloud.inFlight=null;cloudUnlock();showCloudStatus('Offline · Reconnecting');cloudGateway('Connection interrupted; editing is paused until the cloud reconnects.','reconnecting');let authenticated=true;try{const r=await fetch('/api/session',{cache:'no-store'});authenticated=(await r.json()).authenticated;}catch{}if(!authenticated)cloudGateway('Session expired. Please sign in again.');else cloud.retryTimer=setTimeout(()=>cloudConnect(),1800);};
+}
+async function initCloud(){const name=localStorage.getItem('bc_display_name')||'Designer';$('#cloudName').value=name;
+ try{const r=await fetch('/api/session',{cache:'no-store'});if((await r.json()).authenticated){cloudConnect();return;}}catch{}
+ cloudGateway('Enter the access code for this shared workspace.');
+}
+function persist(){cloudSchedule(170);}
 function changed(){doc().updatedAt=now();persist();scheduleRender();}
 function showToast(msg){let el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
 const HISTORY_LIMIT=60;
@@ -399,7 +544,7 @@ function selectionSVG(){if(editor)return '';const items=selectionItems(),oneArro
  else if(items.length===1||oneGroup){const spots={nw:[b.x-pad,b.y-pad],n:[b.x+b.w/2,b.y-pad],ne:[b.x+b.w+pad,b.y-pad],e:[b.x+b.w+pad,b.y+b.h/2],se:[b.x+b.w+pad,b.y+b.h+pad],s:[b.x+b.w/2,b.y+b.h+pad],sw:[b.x-pad,b.y+b.h+pad],w:[b.x-pad,b.y+b.h/2]};rect+=Object.entries(spots).map(([key,[x,y]])=>`<rect data-handle="${key}" x="${x-r}" y="${y-r}" width="${r*2}" height="${r*2}" rx="${2/z}" fill="#fff" stroke="#EC6426" stroke-width="${1.5/z}"/>`).join('');}
  return rect;}
 function anchorOverlaySVG(){if(state.tool!=='arrow'&&!state.gesture?.mode?.startsWith('arrow-'))return '';let ids=new Set();if(state.anchorHover)ids.add(state.anchorHover);if(state.activeAnchor?.elementId)ids.add(state.activeAnchor.elementId);if(!ids.size)return '';const z=doc().zoom;let out='';for(const id of ids){const obj=doc().elements.find(e=>e.id===id);if(!connectible(obj))continue;for(const port of ANCHORS){const p=anchorPoint(obj,port),selected=state.activeAnchor?.elementId===id&&state.activeAnchor?.anchor===port;out+=`<circle cx="${p.x}" cy="${p.y}" r="${(selected?6:3.9)/z}" fill="${selected?'#F14B3B':'#fff'}" stroke="#F14B3B" stroke-width="${1.3/z}" pointer-events="none"/>`;}}return `<g aria-hidden="true" pointer-events="none">${out}</g>`;}
-function scheduleRender(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;renderCanvas();renderInspector();renderBoards();renderAlignBar();renderTextBar();renderConnectorBar();});}
+function scheduleRender(){if(cloud.ready&&state.gesture&&['draw','move','clone-move','resize','arrow-edit','erase'].includes(state.gesture.mode))cloudSchedule(140);if(!raf)raf=requestAnimationFrame(()=>{raf=0;renderCanvas();renderInspector();renderBoards();renderAlignBar();renderTextBar();renderConnectorBar();drawRemoteCursors();});}
 function renderTextBar(){let bar=$('#textBar'),items=state.selected.map(id=>doc().elements.find(e=>e.id===id)).filter(Boolean),el=items.length===1&&items[0].type==='text'?items[0]:null;bar.classList.toggle('visible',!!el&&!editor);if(!el)return;const size=el.fontSize||24;bar.querySelectorAll('[data-text-size]').forEach(b=>b.classList.toggle('active',Number(b.dataset.textSize)===size));let input=$('#textSizeNumber');if(document.activeElement!==input)input.value=Math.round(size);}
 function applyTextSize(size){size=clamp(Math.round(Number(size)),8,240);if(!Number.isFinite(size))return;const items=state.selected.map(id=>doc().elements.find(x=>x.id===id)).filter(x=>x?.type==='text');if(items.length){checkpoint();for(const el of items){if(el.textBoxVersion!==2){const old=textMeasure(el);el.textBoxVersion=2;el.textWidth=old.w;delete el.textScaleX;delete el.textScaleY;}el.fontSize=size;const b=textMeasure(el);el.w=b.w;el.h=b.h;}changed();}else{state.defaultStyle.fontSize=size;scheduleRender();}}
 
@@ -525,9 +670,9 @@ function canvasDown(e){if(e.button!==0&&e.button!==1)return;if(e.button===1)e.pr
  $('#drawing').setPointerCapture(e.pointerId);
  if(tool==='hand'){state.gesture={mode:'pan',start:{x:e.clientX,y:e.clientY},pan:deep(doc().pan)};$('#drawing').classList.add('is-panning');return;}
  if(tool==='selection'){
-  if(arrowHandle&&state.selected.length===1){const a=doc().elements.find(x=>x.id===state.selected[0]);if(a?.type==='arrow'){state.gesture={mode:'arrow-edit',part:arrowHandle,id:a.id,start:p,original:deep(a),saved:false};return;}}
-  if(handle&&state.selected.length){const originals=deep(selectionItems()),b=deep(selectedBounds());state.gesture={mode:'resize',start:p,handle,original:originals[0],originals,b,saved:false};return;}
-  if(id){const members=groupMembers(id);if(e.shiftKey){state.selected=state.selected.includes(id)?state.selected.filter(x=>!members.includes(x)):[...new Set([...state.selected,...members])];scheduleRender();return;}if(!state.selected.includes(id))state.selected=members;state.gesture={mode:e.altKey?'clone-move':'move',start:p,originals:deep(doc().elements.filter(x=>state.selected.includes(x.id))),saved:false,copies:[]};scheduleRender();return;}
+  if(arrowHandle&&state.selected.length===1){const a=doc().elements.find(x=>x.id===state.selected[0]);if(a?.type==='arrow'){state.gesture={mode:'arrow-edit',part:arrowHandle,id:a.id,start:p,original:deep(a),saved:false};cloudLock([a.id]);return;}}
+  if(handle&&state.selected.length){const originals=deep(selectionItems()),b=deep(selectedBounds());state.gesture={mode:'resize',start:p,handle,original:originals[0],originals,b,saved:false};cloudLock(originals.map(e=>e.id));return;}
+  if(id){const members=groupMembers(id);if(e.shiftKey){state.selected=state.selected.includes(id)?state.selected.filter(x=>!members.includes(x)):[...new Set([...state.selected,...members])];scheduleRender();return;}if(!state.selected.includes(id))state.selected=members;state.gesture={mode:e.altKey?'clone-move':'move',start:p,originals:deep(doc().elements.filter(x=>state.selected.includes(x.id))),saved:false,copies:[]};cloudLock(state.selected);scheduleRender();return;}
   if(!e.shiftKey)state.selected=[];state.gesture={mode:'marquee',start:p,curr:p,shift:e.shiftKey,previous:state.selected.slice()};scheduleRender();return;
  }
  if(tool==='eraser'){if(id){const removed=groupMembers(id);checkpoint();frozenArrowOnTargetRemoval(removed);doc().elements=doc().elements.filter(x=>!removed.includes(x.id));state.selected=[];changed();}state.gesture={mode:'erase'};return;}
@@ -583,11 +728,11 @@ function canvasMove(e){let g=state.gesture,p=mouseAt(e);if(state.tool==='arrow'|
 }
 function canvasUp(e){let g=state.gesture;if(!g)return;$('#drawing').classList.remove('is-panning');if(g.mode==='draw'){let el=doc().elements.find(x=>x.id===g.id);if(el){if(el.type==='pencil'){if(el.points.length<2)el.points.push({x:el.x+1,y:el.y+1});}else if(Math.abs(el.w)<5&&Math.abs(el.h)<5){el.w=el.type==='line'||el.type==='arrow'?170:165;el.h=el.type==='line'||el.type==='arrow'?-80:112;}state.selected=[el.id];}setTool('selection');}
  if(g.mode==='marquee'){let l=Math.min(g.start.x,g.curr.x),r=Math.max(g.start.x,g.curr.x),t=Math.min(g.start.y,g.curr.y),b=Math.max(g.start.y,g.curr.y);if(r-l>5&&b-t>5)state.selected=[...new Set([...(g.shift?g.previous:[]),...doc().elements.filter(el=>{let x=bbox(el);return x.x<r&&x.x+x.w>l&&x.y<b&&x.y+x.h>t;}).map(el=>el.id)])];state.selected=expandGroups(state.selected);}
- if(g.mode==='beginText'){let obj=doc().elements.find(x=>x.id===g.id);state.gesture=null;if(obj)startEditor(obj,true);scheduleRender();return;}if(g.mode==='move'||g.mode==='clone-move'||g.mode==='resize'||g.mode==='draw'||g.mode==='pan'||g.mode==='arrow-edit')persist();state.gesture=null;state.guides=[];state.activeAnchor=null;scheduleRender();}
+ if(g.mode==='beginText'){let obj=doc().elements.find(x=>x.id===g.id);state.gesture=null;if(obj)startEditor(obj,true);scheduleRender();return;}if(g.mode==='move'||g.mode==='clone-move'||g.mode==='resize'||g.mode==='draw'||g.mode==='pan'||g.mode==='arrow-edit')persist();if(cloud.ready){cloudFlush();setTimeout(cloudUnlock,750);}else cloudUnlock();state.gesture=null;state.guides=[];state.activeAnchor=null;scheduleRender();}
 function zoomTo(zoom,cx,cy){let d=doc(),z=Math.max(.2,Math.min(4,zoom)),wx=(cx-d.pan.x)/d.zoom,wy=(cy-d.pan.y)/d.zoom;d.pan={x:cx-wx*z,y:cy-wy*z};d.zoom=z;changed();}
 function fitDrawing(){let els=doc().elements,stage=$('#stage'),W=stage.clientWidth,H=stage.clientHeight;if(!els.length){doc().pan={x:W/2-160,y:H/2-90};doc().zoom=1;changed();return;}let bxs=els.map(bbox),minx=Math.min(...bxs.map(b=>b.x))-65,miny=Math.min(...bxs.map(b=>b.y))-65,maxx=Math.max(...bxs.map(b=>b.x+b.w))+65,maxy=Math.max(...bxs.map(b=>b.y+b.h))+65,z=Math.min(1.3,Math.max(.2,Math.min(W/(maxx-minx),H/(maxy-miny))));doc().zoom=z;doc().pan={x:(W-(maxx-minx)*z)/2-minx*z,y:(H-(maxy-miny)*z)/2-miny*z};changed();}
 function startEditor(e,isNew=false){
- finishEditor();const text=e.type==='text',b=text?textMeasure(e):bbox(e),sp=screenPoint(e.x,e.y),z=doc().zoom;
+ finishEditor();cloudLock([e.id]);const text=e.type==='text',b=text?textMeasure(e):bbox(e),sp=screenPoint(e.x,e.y),z=doc().zoom;
  const el=document.createElement('textarea');el.className='text-editor';el.style.left=sp.x+'px';el.style.top=sp.y+'px';
  const font=(e.fontSize||24)*(e.textBoxVersion===2?1:(e.textScaleY||1));
  el.style.fontSize=Math.max(8,font*z)+'px';el.style.fontWeight=String(e.fontWeight||(text&&e.textBoxVersion===2?500:700));
@@ -615,7 +760,7 @@ function finishEditor(){
   }
   e.text=value;if(e.type==='text'){const b=textMeasure(e);e.w=b.w;e.h=b.h;}changed();
  }
- node.remove();scheduleRender();
+ node.remove();if(cloud.ready){cloudFlush();setTimeout(cloudUnlock,750);}else cloudUnlock();scheduleRender();
 }
 function deleteSelection(){if(!state.selected.length)return;checkpoint();frozenArrowOnTargetRemoval(state.selected);doc().elements=doc().elements.filter(x=>!state.selected.includes(x.id));state.selected=[];changed();showToast('Removed selected elements');}
 function duplicateSelection(){let originals=doc().elements.filter(x=>state.selected.includes(x.id));if(!originals.length)return;checkpoint();let copies=copyObjects(originals,24,24);doc().elements.push(...copies);state.selected=copies.map(e=>e.id);changed();showToast('Duplicated');}
@@ -704,10 +849,17 @@ $('#toolbar').addEventListener('click',e=>{const btn=e.target.closest('[data-too
  svg.addEventListener('wheel',e=>{e.preventDefault();const rect=svg.getBoundingClientRect(),delta=e.deltaY*(e.deltaMode===1?14:e.deltaMode===2?300:1);zoomTo(doc().zoom*Math.exp(-delta*.003),e.clientX-rect.left,e.clientY-rect.top);},{passive:false});
  $('#zoomIn').addEventListener('click',()=>zoomTo(doc().zoom*1.25,$('#stage').clientWidth/2,$('#stage').clientHeight/2));$('#zoomOut').addEventListener('click',()=>zoomTo(doc().zoom*.8,$('#stage').clientWidth/2,$('#stage').clientHeight/2));$('#zoomFit').addEventListener('click',fitDrawing);
  document.addEventListener('keydown',applyShortcuts);document.addEventListener('keyup',e=>{if(e.code==='Space')state.space=false;});window.addEventListener('blur',()=>{state.space=false;});
+ $('#cloudLogin').addEventListener('submit',async(e)=>{e.preventDefault();const pass=$('#cloudPassword').value;$('#cloudLoginButton').disabled=true;$('#cloudMessage').textContent='Authenticating…';try{
+   const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});const data=await r.json();
+   if(!r.ok)throw Error(data.error||'Access denied');localStorage.setItem('bc_display_name',$('#cloudName').value.trim()||'Designer');$('#cloudPassword').value='';cloudConnect();
+  }catch(err){$('#cloudMessage').textContent=err.message||'Connection failed';}finally{$('#cloudLoginButton').disabled=false;}});
+ $('#cloudIndicator').addEventListener('click',async()=>{if(!confirm('Sign out of buonocanvas cloud on this device?'))return;await fetch('/api/logout',{method:'POST'}).catch(()=>{});cloud.socket?.close();location.reload();});
+ $('#drawing').addEventListener('pointermove',sendCursor);
+ setInterval(()=>{if(cloud.localLocks.size&&cloud.online){const ids=new Map();for(const key of cloud.localLocks){const [boardId,id]=key.split(':');const values=ids.get(boardId)||[];values.push(id);ids.set(boardId,values);}for(const [boardId,values] of ids)wsSend({type:'lock',boardId,ids:values});}},4500);
  $('#stage').addEventListener('dragover',e=>e.preventDefault());$('#stage').addEventListener('drop',e=>{e.preventDefault();const file=e.dataTransfer.files[0];if(!file)return;if(file.type.startsWith('image/'))importImage(file,e.clientX,e.clientY);else if(file.name.endsWith('.json')||file.name.endsWith('.excalidraw'))importJSON(file);});
  const observer=new ResizeObserver(()=>renderCanvas());observer.observe($('#stage'));}
-window.addEventListener('pagehide',()=>{clearTimeout(savedTimer);try{localStorage.setItem(KEY,JSON.stringify({docs:state.docs,currentId:state.currentId}));}catch{}});
-bind();renderAll();document.fonts?.ready?.then(()=>scheduleRender());requestAnimationFrame(()=>{if(doc().elements.length&&doc().pan.x===0&&doc().pan.y===0)fitDrawing();});
+window.addEventListener('pagehide',()=>{cloudUnlock();});
+bind();renderAll();initCloud();document.fonts?.ready?.then(()=>scheduleRender());requestAnimationFrame(()=>{if(doc().elements.length&&doc().pan.x===0&&doc().pan.y===0)fitDrawing();});
 })();
 </script>
 </body>
