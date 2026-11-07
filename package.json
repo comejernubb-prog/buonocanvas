@@ -1,0 +1,13 @@
+{
+  "name": "buonocanvas",
+  "private": true,
+  "version": "7.0.0",
+  "description": "BUONO Design Studio — local-first infinite canvas",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
