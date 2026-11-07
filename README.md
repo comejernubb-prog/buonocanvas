@@ -40,3 +40,17 @@ APP_PASSWORD='replace-with-12-plus-characters' SESSION_SECRET='replace-with-32-p
 ```
 
 Open `http://localhost:3000`, enter your access code, and open another browser / private context to collaborate. All device-specific pan and zoom positions remain local; canvas objects, titles, backgrounds and grid are shared.
+
+
+## v10 — Smooth Bézier connector editing
+
+- There is **one Arrow tool**. No separate Straight/Bent mode and no floating connector-mode menu or editor hint.
+- Draw an arrow normally, then **double-click the arrow line** to enter curve-edit mode.
+- The connector is rendered as three continuously joined **cubic Bézier** segments through two draggable inner knots.
+- Drag either large inner knot to bend the stroke into an arc or S-curve, or drag the stroke itself to move the nearest knot.
+- Four small violet tangent handles let you refine curvature. Dragging one mirrors its opposite handle, maintaining a smooth join.
+- Start/end anchors remain attached to shapes and images; arrowheads follow the terminal curve's tangent.
+- Existing v9 arrow data remains readable. Previously saved bend points now render as smooth curves. Existing cloud/database/WebSocket protocol is unchanged; optional per-object `curveTangents` are persisted within the current JSON schema.
+- Editing works at browser zoom levels using screen-space hit detection; SVG export retains Bézier geometry. Undo/Redo preserves node and tangent edits.
+
+Validation: Node JavaScript syntax check and automated Chromium pointer tests for double-click activation, knot drag, tangent drag, direct-line drag, moving attached objects, and hiding the removed UI.
