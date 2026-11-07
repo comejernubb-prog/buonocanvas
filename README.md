@@ -54,3 +54,15 @@ Open `http://localhost:3000`, enter your access code, and open another browser /
 - Editing works at browser zoom levels using screen-space hit detection; SVG export retains Bézier geometry. Undo/Redo preserves node and tangent edits.
 
 Validation: Node JavaScript syntax check and automated Chromium pointer tests for double-click activation, knot drag, tangent drag, direct-line drag, moving attached objects, and hiding the removed UI.
+
+## v11 — Compact single-row toolbar and shared connector editor
+
+- The drawing toolbar now sits **inside the top header** on the same row as the menu, compact infinity logo, cloud status, and actions. The canvas starts directly below a **40px header**; no separate floating toolbar or extra logo strip. Narrow displays can horizontally scroll the toolbar.
+- Arrow and Line are now both editable **smooth cubic Bézier connectors**.
+- Newly drawn arrows and lines have **one editable midpoint knot** (initially collinear, so visually straight). Drag this midpoint to curve the connector immediately.
+- **Double-click the stroke** (or its selected midpoint) to insert a second knot. Afterward, both knots and their mirrored tangent handles can be dragged to create continuous S-curves. No separate Straight/Bent selector.
+- Lines retain the same stroke editing behavior as arrows, but **render circular endpoint markers at both ends** instead of an arrowhead.
+- Both types can snap endpoint bindings to shape/image ports, keep connections on object movement, and retain knot geometry through cloud sync.
+- Existing older documents with 0 or 2 stored bends remain readable; this is a front-end-only change and leaves the SQLite/WebSocket backend, sessions, and Railway volume untouched.
+
+Testing performed: JavaScript syntax validation and browser interaction checks for desktop toolbar layout, Arrow and Line midpoint drags, double-click adding a second knot, tangent editing, endpoint circles, and responsive layout code review.
