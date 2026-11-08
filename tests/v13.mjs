@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import '../v13-core.js';
 
 const lib=globalThis.BuonoV13;
-const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/tAAAAABJRU5ErkJggg==','base64');
+const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGPcEiDyn4GBgYGJAQoAIEgCG7rNw8IAAAAASUVORK5CYII=','base64');
 const data={type:'buonocanvas-editable-png',version:1,document:{name:'ไทย test',elements:[{id:'a',type:'arrow',x:1,y:2,w:10,h:20}]}};
 const embedded=lib.embedEditablePng(png,data);
 assert.notEqual(embedded.length,png.length);
