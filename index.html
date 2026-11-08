@@ -1100,16 +1100,35 @@ function alignSelection(mode){const items=selectionItems();if(items.length<2)ret
  state.guides=[];changed();showToast(mode==='sameHeight'?'Equal height · ratios preserved':mode==='row'?'Horizontal row · ratios preserved':'Objects aligned');
 }
 function mouseAt(e){const p=worldPoint(e);return {x:p.x,y:p.y};}
-function hitTest(e){let el=e.target.closest?.('[data-id]');return el?.getAttribute('data-id')||null;}
+// Prefer text's visible layout box over the large invisible hit stroke of arrows and lines.
+// This is a selection-only priority: drawing, erasing and actual foreground shapes keep their behavior.
+function textBoxHitAt(p){
+ const d=doc(),pad=(state.lastPointerType==='touch'?9:state.lastPointerType==='pen'?6:4)/Math.max(.05,d.zoom);
+ for(let i=d.elements.length-1;i>=0;i--){
+  const item=d.elements[i];if(item.type!=='text')continue;
+  const b=textMeasure(item);
+  if(p.x>=b.x-pad&&p.x<=b.x+b.w+pad&&p.y>=b.y-pad&&p.y<=b.y+b.h+pad)return item;
+ }
+ return null;
+}
+function hitTest(e){
+ const native=e.target.closest?.('[data-id]')?.getAttribute('data-id')||null;
+ if(state.tool!=='selection'||state.multiArrow||!Number.isFinite(e.clientX)||!Number.isFinite(e.clientY))return native;
+ const nativeItem=native?doc().elements.find(el=>el.id===native):null;
+ if(nativeItem&&!isConnector(nativeItem)&&nativeItem.type!=='text')return native;
+ return textBoxHitAt(mouseAt(e))?.id||native;
+}
 let lastTextTap=null,lastArrowTap=null,lastHandleTap=null;
 function canvasDownCore(e){if(e.button!==0&&e.button!==1&&!forcedTool)return;if(e.button===1)e.preventDefault();closeImageMenu();if(editor&&e.target!==editor)finishEditor();
- if(state.multiArrow&&e.button===0){multiArrowClick(e);return;}const tool=forcedTool||(state.space||e.button===1?'hand':state.tool),p=mouseAt(e),handle=e.target.closest?.('[data-handle]')?.getAttribute('data-handle'),arrowHandle=e.target.closest?.('[data-arrow-handle]')?.getAttribute('data-arrow-handle');
- let id=hitTest(e);const closestArrow=tool==='selection'&&!handle?nearArrowAtPoint(p):null;if(!id&&closestArrow)id=closestArrow.id;
+ if(state.multiArrow&&e.button===0){multiArrowClick(e);return;}const tool=forcedTool||(state.space||e.button===1?'hand':state.tool),p=mouseAt(e),handle=e.target.closest?.('[data-handle]')?.getAttribute('data-handle'),rawArrowHandle=e.target.closest?.('[data-arrow-handle]')?.getAttribute('data-arrow-handle');
+ let id=hitTest(e);const preferText=tool==='selection'&&!!id&&doc().elements.some(el=>el.id===id&&el.type==='text')&&textBoxHitAt(p)?.id===id;
+ const arrowHandle=preferText?null:rawArrowHandle;
+ const closestArrow=tool==='selection'&&!handle&&!preferText?nearArrowAtPoint(p):null;if(!id&&closestArrow)id=closestArrow.id;
  // SVG nodes are redrawn after selection; the browser may lose its native dblclick target.
  // Track taps against the stable element ID so double-click-to-edit still works.
  const txt=id&&doc().elements.find(x=>x.id===id&&(['text','note'].includes(x.type)||LABEL_TYPES.has(x.type)));
  const t=performance.now();
- const arrowTarget=(id&&doc().elements.find(x=>x.id===id&&isConnector(x)))||(arrowHandle&&selectionItems().find(isConnector))||closestArrow;
+ const arrowTarget=!txt&&((id&&doc().elements.find(x=>x.id===id&&isConnector(x)))||(arrowHandle&&selectionItems().find(isConnector))||closestArrow);
  if(e.button===0&&tool==='selection'&&!handle&&!arrowHandle&&arrowTarget){
   const same=lastArrowTap&&lastArrowTap.id===arrowTarget.id&&t-lastArrowTap.time<525&&Math.hypot(e.clientX-lastArrowTap.x,e.clientY-lastArrowTap.y)<16;
   if(same){lastArrowTap=null;lastTextTap=null;enterConnectorEdit(arrowTarget,p);return;}

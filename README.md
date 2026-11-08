@@ -121,3 +121,8 @@ Endpoints: `GET /health`, `POST /api/login`, `GET /api/session`, authenticated `
 - Local Node HTTP API: authorization, same-origin validation, raw upload and readback; SHA-256 of a 3600×2200 JPEG was identical before and after the server upload.
 - PDF writer: generated native vector PDF; inspected via PyMuPDF and confirmed vector drawing commands and embedded JPEG XObject with **byte-identical original JPEG payload**.
 - Automated full-browser UI tests were **not available** in this container because Chromium is configured with a managed `URLBlocklist: ["*"]` policy. Perform a two-device manual acceptance check after deployment.
+
+
+### Selection hit priority for overlapping connectors
+
+When an Arrow/Line runs across or close to a free Text Box, clicking inside the text's on-screen layout box selects the **text**, even if the connector's invisible SVG hit stroke or an editing handle is on top. The selection test is performed in world coordinates, so it works at different pan/zoom levels and on touch devices. Shapes/images on top retain their normal stacking behavior. Click an uncovered part of the connector to select and edit the line. No document, database, or sync format changes are required. Regression coverage: `tests/hit-testing.test.mjs`.
