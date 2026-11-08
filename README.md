@@ -1,6 +1,28 @@
-# buonocanvas v12 — Original-image fidelity, vector PDF, editable line thickness
+# buonocanvas v13 — Trackpad / mouse / Apple Pencil input, stable sessions, modern sticky notes
 
 A minimalist real-time shared infinite canvas. Source: GitHub; deployment: Railway; boards: SQLite on the attached `/data` persistent volume; live collaboration: WebSocket with object revisions.
+
+## v13 changes
+
+**Input (mouse, trackpad, Apple Pencil)**
+- **Wheel / trackpad**: pinch-to-zoom (Chrome/Edge/Firefox send it as Ctrl+wheel, Safari as gesture events), **two-finger scroll pans**, a **mouse wheel zooms** (Shift+wheel pans sideways), Ctrl/Cmd+scroll always zooms. Zoom range 10%–800%. Pan/zoom is local-only and no longer triggers a cloud sync.
+- **Apple Pencil / touch**: `touch-action: none` + callout/selection suppression. Once a Pencil is seen, the Pencil draws/selects, **one finger pans** (a quick tap still selects) and **two fingers pinch-zoom**; a finger touching while the Pencil is busy is ignored (palm rejection). Without a Pencil, a finger acts like a mouse, and a second finger cancels the stray stroke and pinches. The Pencil's eraser button erases.
+- **Pencil tool stays active** after each stroke (no more switching back to Select), strokes use high-rate coalesced samples, are simplified/rounded before saving and are rendered smoothed. Pressure sensitivity is *not* implemented (strokes have a single width).
+
+**Arrows**
+- The head direction is taken from the actual curve one head-length behind the tip instead of the last Bézier handle, so it always points along the line and no longer twitches.
+- Port snapping has hysteresis (acquire at 14 px, release at 24 px; larger for touch/pen) instead of a constant 24 px grab, so the tip no longer feels "sticky". Hold **Alt** to disable snapping.
+- Handles keep their look but have much larger invisible hit areas (16 px mouse / 24 px touch & pen; arrow body 14/22 px), which was the main cause of "missing" a node and losing the selection.
+
+**Stability**
+- Server: unhandled errors from an aborted upload used to crash the process (verified against v12). All requests are now guarded, plus graceful SIGTERM shutdown, WebSocket heartbeat (server ping every 20 s, 60 s reaper; client ping + wake-up check after the tab/iPad sleeps), `synchronous=NORMAL` (still durable across process crashes in WAL mode), audit-table trimming, tolerant reads of unreadable rows, and correct remote-lock release.
+- Client: a dropped connection no longer blocks the UI or wipes the selection. A small banner shows "Reconnecting…", edits made offline are re-applied on top of the fresh server copy on reconnect (server wins only for objects someone else changed), selection is kept, and undo history is kept unless the board changed remotely. Conflict reloads also keep the selection. Reconnect uses exponential backoff.
+
+**Performance**
+- `index.html` and `pdf-vector.js` are pre-compressed (brotli/gzip) with ETag/304.
+- Rendering is incremental: per-element DOM cache, only changed objects are re-parsed, pan/zoom only changes one transform, inspector/board list skip identical re-renders.
+
+**Sticky notes**: rounded card, layered soft shadow, hairline border, word-wrapped text (Prompt 500), pastel colour rotation + colour row in the Inspector, auto-grow height when the text is longer than the card, PDF export matches. Notes no longer use the stroke thickness controls.
 
 ## v12 changes
 

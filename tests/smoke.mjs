@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
+import net from 'node:net';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const port=32000+Math.floor(Math.random()*15000),base=`http://127.0.0.1:${port}`;
 const temp=mkdtempSync(join(tmpdir(),'buono-assets-'));
@@ -30,6 +31,12 @@ async function main(){try{
  const elements=[{id:'rect',type:'rectangle',x:1,y:1,w:120,h:50,stroke:'#141414',fill:'transparent',opacity:100,strokeWidth:6},{id:'curve',type:'arrow',x:5,y:20,w:160,h:60,stroke:'#ee5500',fill:'transparent',opacity:100,strokeWidth:2}];
  const output=await context.window.BuonoVectorPDF.build({elements,bounds:{x:0,y:0,w:300,h:180},background:'#ffffff',shapePath:e=>e.type==='rectangle'?`M${e.x} ${e.y}H${e.x+e.w}V${e.y+e.h}H${e.x}Z`:'M5 20 C40 50 100 10 165 80',arrowHead:()=> 'M150 65L165 80L153 75',arrowEnds:()=>({}),textLayout:()=>({}),textMeasure:()=>({})});
  const pdf=Buffer.from(await output.arrayBuffer()),str=pdf.toString('latin1');assert.ok(str.startsWith('%PDF-1.4'));assert.ok(str.includes(' c\n')&&str.includes(' S\n')||str.includes('S\n'));assert.ok(str.includes('xref\n'));
- console.log('Smoke tests passed: auth, upload, original byte preservation, cross-origin protection, dedupe, vector PDF syntax.');
+ // Compressed, cacheable static files.
+ const page=await fetch(base+'/',{headers:{'accept-encoding':'gzip'}});assert.equal(page.headers.get('content-encoding'),'gzip');const etag=page.headers.get('etag');assert.ok(etag);
+ assert.equal((await fetch(base+'/',{headers:{'if-none-match':etag}})).status,304);
+ // An upload aborted mid-body (flaky mobile network) must not take the server down.
+ await new Promise(resolve=>{const sock=net.connect(port,'127.0.0.1',()=>{sock.write(`POST /api/assets HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nOrigin: ${base}\r\nCookie: ${cookie}\r\nContent-Type: image/png\r\nContent-Length: 900000\r\n\r\nabc`);setTimeout(()=>{sock.destroy();resolve();},150);});});
+ await new Promise(r=>setTimeout(r,200));assert.equal((await fetch(base+'/health')).status,200);
+ console.log('Smoke tests passed: auth, upload, original byte preservation, cross-origin protection, dedupe, vector PDF syntax, compression/ETag, aborted-upload resilience.');
 }finally{app.kill('SIGTERM');rmSync(temp,{recursive:true,force:true});}}
 main().catch(err=>{console.error(err);process.exitCode=1;});

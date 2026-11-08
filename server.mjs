@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFileSync, mkdirSync, existsSync, writeFileSync, createReadStream, statSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { gzipSync, brotliCompressSync, constants as zc } from 'node:zlib';
 import { randomBytes, createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -14,7 +15,7 @@ if (!password || password.length < 8 || !secret || secret.length < 32) {
 }
 mkdirSync(dataDir, { recursive: true });
 const db = new DatabaseSync(join(dataDir, 'buonocanvas.sqlite'), { timeout: 5000 });
-db.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;
+db.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;
 CREATE TABLE IF NOT EXISTS boards (id TEXT PRIMARY KEY, name TEXT NOT NULL, background TEXT NOT NULL, grid INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1, deleted INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS elements (board_id TEXT NOT NULL, id TEXT NOT NULL, content TEXT, revision INTEGER NOT NULL DEFAULT 1, deleted INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY(board_id,id), FOREIGN KEY(board_id) REFERENCES boards(id));
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, board_id TEXT NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL, objects INTEGER NOT NULL, time INTEGER NOT NULL);
@@ -55,14 +56,26 @@ function imageExtension(data){
 }
 function sameOrigin(req){try{const origin=req.headers.origin;if(!origin)return false;return new URL(origin).host===req.headers.host;}catch{return false;}}
 const attempts=new Map();
-const html=readFileSync(new URL('./index.html',import.meta.url));
-const pdfScript=readFileSync(new URL('./pdf-vector.js',import.meta.url));
-const server=createServer(async(req,res)=>{
+// Static files are compressed once at startup (index.html is ~380 KB; brotli cuts it to a fraction),
+// so first load and every reload on a phone/iPad connection is much lighter.
+function prepareStatic(file){const raw=readFileSync(new URL(file,import.meta.url));
+  return {raw,etag:'"'+createHash('sha1').update(raw).digest('base64url').slice(0,20)+'"',
+    br:brotliCompressSync(raw,{params:{[zc.BROTLI_PARAM_QUALITY]:9}}),gz:gzipSync(raw,{level:9})};}
+function sendStatic(req,res,asset,type,extra={}){
+  const head={'Content-Type':type,'Cache-Control':'no-cache, must-revalidate','ETag':asset.etag,'Vary':'Accept-Encoding','X-Content-Type-Options':'nosniff',...extra};
+  if(req.headers['if-none-match']===asset.etag){res.writeHead(304,head);res.end();return;}
+  const accept=String(req.headers['accept-encoding']||'');let body=asset.raw;
+  if(/\bbr\b/.test(accept)){body=asset.br;head['Content-Encoding']='br';}
+  else if(/\bgzip\b/.test(accept)){body=asset.gz;head['Content-Encoding']='gzip';}
+  head['Content-Length']=body.length;res.writeHead(200,head);res.end(req.method==='HEAD'?undefined:body);
+}
+const htmlAsset=prepareStatic('./index.html');
+const pdfAsset=prepareStatic('./pdf-vector.js');
+async function handle(req,res){
   const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`),path=url.pathname;
   if(path==='/health'){json(res,200,{ok:true,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true});return;}
   if(path==='/pdf-vector.js'&&(req.method==='GET'||req.method==='HEAD')){
-    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-cache, must-revalidate','X-Content-Type-Options':'nosniff'});
-    res.end(req.method==='HEAD'?'':pdfScript);return;
+    sendStatic(req,res,pdfAsset,'text/javascript; charset=utf-8');return;
   }
   if(path==='/api/assets'&&req.method==='POST'){
     if(!getActor(req)){json(res,401,{error:'Login required'});return;}
@@ -90,7 +103,7 @@ const server=createServer(async(req,res)=>{
     res.writeHead(200,{'Content-Type':ASSET_TYPES[match[2]],'Content-Length':statSync(target).size,'Cache-Control':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'});
     if(req.method==='HEAD'){res.end();return;}createReadStream(target).pipe(res);return;
   }
-  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:12});return;}
+  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:13});return;}
   if(path==='/api/login'&&req.method==='POST'){
     const ip=(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').toString().split(',')[0].trim();
     const current=attempts.get(ip)||{count:0,until:0};
@@ -108,11 +121,16 @@ const server=createServer(async(req,res)=>{
   }
   if(path==='/api/logout'&&req.method==='POST'){json(res,200,{ok:true},{'Set-Cookie':'bc_session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0; Secure'});return;}
   if((path==='/'||path==='/index.html')&&['GET','HEAD'].includes(req.method||'')){
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-cache, must-revalidate','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin'});
-    res.end(req.method==='HEAD'?'':html);return;
+    sendStatic(req,res,htmlAsset,'text/html; charset=utf-8',{'Referrer-Policy':'strict-origin-when-cross-origin'});return;
   }
   json(res,404,{error:'Not found'});
-});
+}
+// An aborted upload (flaky iPad connection) makes `for await(req)` throw. Unhandled, that crashed the whole
+// server and disconnected every collaborator, so every request is guarded.
+const server=createServer((req,res)=>{handle(req,res).catch(err=>{
+  if(err?.code!=='ECONNRESET'&&err?.message!=='aborted')console.error('Request failed:',req.method,req.url,err);
+  try{if(!res.headersSent)json(res,500,{error:'Server error'});else res.destroy();}catch{}
+});});
 
 // Minimal standards-compliant RFC6455 server implementation; no npm dependencies.
 const GUID='258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -121,10 +139,10 @@ const MAX_FRAME=16*1024*1024,MAX_MESSAGE=16*1024*1024;
 function frame(opcode,payload){const buf=Buffer.isBuffer(payload)?payload:Buffer.from(payload||'');const size=buf.length;const h=Buffer.alloc(size<126?2:size<65536?4:10);h[0]=0x80|opcode;if(size<126)h[1]=size;else if(size<65536){h[1]=126;h.writeUInt16BE(size,2);}else{h[1]=127;h.writeBigUInt64BE(BigInt(size),2);}return Buffer.concat([h,buf]);}
 function socketSend(c,data){if(!c.alive||c.socket.destroyed)return;const raw=JSON.stringify(data);if(c.socket.writableLength>24*1024*1024){c.socket.destroy();return;}c.socket.write(frame(1,raw));}
 function broadcast(data,except=null){for(const c of clients)if(c!==except)socketSend(c,data);}
-function closeClient(c){if(!c.alive)return;c.alive=false;clients.delete(c);for(const [key,v] of locks)if(v.actor===c.actor){locks.delete(key);broadcast({type:'unlock',key,actor:c.actor});}broadcast({type:'presence',users:[...clients].map(x=>({id:x.actor,name:x.name}))});}
+function closeClient(c){if(!c.alive)return;c.alive=false;clients.delete(c);const freed=new Map();for(const [key,v] of locks)if(v.actor===c.actor){locks.delete(key);const at=key.indexOf(':'),board=key.slice(0,at),list=freed.get(board)||[];list.push(key.slice(at+1));freed.set(board,list);}for(const [boardId,ids] of freed)broadcast({type:'unlock',boardId,ids,actor:c.actor});broadcast({type:'presence',users:[...clients].map(x=>({id:x.actor,name:x.name}))});}
 const idOK=x=>typeof x==='string'&&x.length>=1&&x.length<=100&&/^[a-zA-Z0-9_-]+$/.test(x);
 const metaValid=m=>m&&typeof m==='object'&&typeof m.name==='string'&&m.name.length<=220&&typeof m.background==='string'&&m.background.length<=60&&typeof m.grid==='boolean';
-function boardData(id){const b=stmt.board.get(id);if(!b||b.deleted)return null;return {id:b.id,name:b.name,background:b.background,grid:!!b.grid,revision:b.revision,updatedAt:b.updated_at,elements:stmt.allElements.all(id).map(e=>({...JSON.parse(e.content),_rev:e.revision}))};}
+function boardData(id){const b=stmt.board.get(id);if(!b||b.deleted)return null;return {id:b.id,name:b.name,background:b.background,grid:!!b.grid,revision:b.revision,updatedAt:b.updated_at,elements:stmt.allElements.all(id).flatMap(e=>{try{return [{...JSON.parse(e.content),_rev:e.revision}];}catch{console.error('Skipping unreadable element',id,e.id);return [];}})};}
 function allBoards(){return stmt.listBoards.all().map(b=>boardData(b.id));}
 function lockKey(b,id){return `${b}:${id}`;}
 function lockState(key){const v=locks.get(key);if(!v)return null;if(v.expires<now()){locks.delete(key);return null;}return v;}
@@ -169,6 +187,7 @@ function handleDelete(c,msg){const b=stmt.board.get(msg.boardId);if(!b||b.delete
 }
 function wsMessage(c,raw){let msg;try{msg=JSON.parse(raw);}catch{return;}if(!msg||typeof msg!=='object')return;
  if(msg.type==='intro'){c.name=String(msg.name||'Collaborator').slice(0,38);socketSend(c,{type:'welcome',actor:c.actor,boards:allBoards(),users:[...clients].map(x=>({id:x.actor,name:x.name}))});broadcast({type:'presence',users:[...clients].map(x=>({id:x.actor,name:x.name}))});return;}
+ if(msg.type==='ping'){socketSend(c,{type:'pong',t:msg.t});return;}
  if(msg.type==='patch'){handlePatch(c,msg);return;}
  if(msg.type==='boardCreate'){handleCreate(c,msg);return;}
  if(msg.type==='boardDelete'){handleDelete(c,msg);return;}
@@ -182,9 +201,9 @@ server.on('upgrade',(req,socket,head)=>{
   if(path!=='/ws'||!getActor(req)||!req.headers['sec-websocket-key']||!origin||new URL(origin).host!==host){socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return;}
   const accept=createHash('sha1').update(req.headers['sec-websocket-key']+GUID).digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');
-  const c={socket,actor:getActor(req)+'-'+randomBytes(5).toString('hex'),name:'Collaborator',buffer:Buffer.alloc(0),fragment:[],fragmentSize:0,alive:true};clients.add(c);
+  const c={socket,actor:getActor(req)+'-'+randomBytes(5).toString('hex'),name:'Collaborator',buffer:Buffer.alloc(0),fragment:[],fragmentSize:0,alive:true,lastSeen:now()};clients.add(c);socket.setNoDelay(true);
   socket.on('data',data=>{
-    c.buffer=Buffer.concat([c.buffer,data]);if(c.buffer.length>MAX_FRAME+100){socket.destroy();return;}
+    c.lastSeen=now();c.buffer=Buffer.concat([c.buffer,data]);if(c.buffer.length>MAX_FRAME+100){socket.destroy();return;}
     while(c.buffer.length>=2){const b0=c.buffer[0],b1=c.buffer[1],opcode=b0&15,fin=!!(b0&0x80),masked=!!(b1&0x80);let len=b1&127,at=2;
       if(!masked){socket.destroy();return;}
       if(len===126){if(c.buffer.length<4)break;len=c.buffer.readUInt16BE(2);at=4;}
@@ -207,4 +226,14 @@ server.on('upgrade',(req,socket,head)=>{
   if(head?.length)socket.emit('data',head);
 });
 setInterval(()=>{for(const [key,l] of locks)if(l.expires<now())locks.delete(key);},4000).unref();
-const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v12 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
+// Heartbeat: proxies (Railway) and iOS Safari silently drop idle sockets. Ping every 20 s so live
+// connections stay open, and reap sockets that have been silent for over a minute.
+setInterval(()=>{const t=now();for(const c of [...clients]){if(t-c.lastSeen>60000){c.socket.destroy();continue;}try{c.socket.write(frame(9,''));}catch{}}},20000).unref();
+setInterval(()=>{const t=now();for(const [ip,a] of attempts)if(a.until<t&&a.count===0)attempts.delete(ip);},600000).unref();
+// The audit log was written on every sync tick (several per second while dragging) and never trimmed.
+setInterval(()=>{try{db.exec('DELETE FROM audit WHERE id < (SELECT COALESCE(MAX(id),0) FROM audit) - 5000');}catch(err){console.error('Audit trim failed',err);}},3600000).unref();
+function shutdown(){console.log('Shutting down');for(const c of clients){try{c.socket.end(frame(8,''));}catch{}}server.close();try{db.exec('PRAGMA wal_checkpoint(TRUNCATE)');db.close();}catch{}setTimeout(()=>process.exit(0),300).unref();}
+process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
+process.on('unhandledRejection',err=>console.error('Unhandled rejection',err));
+process.on('uncaughtException',err=>console.error('Uncaught exception',err));
+const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v13 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
