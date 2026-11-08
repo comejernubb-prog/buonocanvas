@@ -20,7 +20,7 @@ async function main(){try{
  assert.equal((await fetch(base+'/api/backup')).status,401);
  const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'local-test-password-23'})});
  assert.equal(login.status,200);const cookie=login.headers.get('set-cookie')?.split(';')[0];assert.ok(cookie);
- const original=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/tAAAAABJRU5ErkJggg==','base64');
+ const original=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGPcEiDyn4GBgYGJAQoAIEgCG7rNw8IAAAAASUVORK5CYII=','base64');
  const forbidden=await fetch(base+'/api/assets',{method:'POST',headers:{Cookie:cookie,Origin:'https://evil.example','Content-Type':'image/png'},body:original});assert.equal(forbidden.status,403);
  const unauthorized=await fetch(base+'/api/assets',{method:'POST',headers:{Origin:base,'Content-Type':'image/png'},body:original});assert.equal(unauthorized.status,401);
  const upload=await fetch(base+'/api/assets',{method:'POST',headers:{Cookie:cookie,Origin:base,'Content-Type':'image/png'},body:original});assert.equal(upload.status,201);
