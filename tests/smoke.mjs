@@ -32,7 +32,7 @@ async function main(){try{
  // Authenticated database + original-asset backup preserves bytes, not previews.
  const backupRes=await fetch(base+'/api/backup',{headers:{Cookie:cookie}});assert.equal(backupRes.status,200);
  const tar=gunzipSync(Buffer.from(await backupRes.arrayBuffer()));let offset=0;const archive=new Map();
- while(offset+512<=tar.length){const name=tar.toString('utf8',offset,offset+100).split('\\0')[0];if(!name)break;const len=parseInt(tar.toString('ascii',offset+124,offset+136).replace(/\\0/g,'').trim()||'0',8);archive.set(name,tar.subarray(offset+512,offset+512+len));offset+=512+Math.ceil(len/512)*512;}
+ while(offset+512<=tar.length){const name=tar.toString('utf8',offset,offset+100).split('\0')[0];if(!name)break;const len=parseInt(tar.toString('ascii',offset+124,offset+136).replace(/\0/g,'').trim()||'0',8);archive.set(name,tar.subarray(offset+512,offset+512+len));offset+=512+Math.ceil(len/512)*512;}
  assert.ok(archive.has('manifest.json'));assert.ok(archive.has('buonocanvas.sqlite'));assert.deepEqual(archive.get('assets/'+data.sha256+'.png'),original);
  // Verify the separate PDF writer outputs native vector operators and a valid PDF xref/trailer.
  const context={window:{},Blob,Uint8Array,TextEncoder,Number,Math,Array,Map,Set,console};vm.createContext(context);vm.runInContext(readFileSync(join(root,'pdf-vector.js'),'utf8'),context);
