@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync, writeFileSync, createReadStream, statSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes, createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
@@ -40,12 +40,57 @@ function cookieMap(header){const obj={};for(const item of String(header||'').spl
 function sign(value){return createHmac('sha256',secret).update(value).digest('base64url');}
 function makeToken(){const id=randomBytes(12).toString('hex'),expires=now()+30*86400000;const val=`${id}.${expires}`;return `${val}.${sign(val)}`;}
 function getActor(req){const tok=cookieMap(req.headers.cookie).bc_session;if(!tok)return null;const parts=tok.split('.');if(parts.length!==3||!/^\d{13}$/.test(parts[1]))return null;const val=parts.slice(0,2).join('.');if(!eq(parts[2],sign(val))||Number(parts[1])<now())return null;return parts[0];}
+// Original image bytes are stored as immutable, content-addressed files, not encoded in SQLite JSON.
+// Never resize, recompress or mutate uploads. The database only stores /api/assets/<sha>.<ext> references.
+const assetsDir=join(dataDir,'assets');mkdirSync(assetsDir,{recursive:true});
+const MAX_ASSET=50*1024*1024;
+const ASSET_TYPES={jpg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif',avif:'image/avif'};
+function imageExtension(data){
+ if(data.length>=3&&data[0]===255&&data[1]===216&&data[2]===255)return 'jpg';
+ if(data.length>=8&&data.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return 'png';
+ if(data.length>=12&&data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WEBP')return 'webp';
+ if(data.length>=6&&['GIF89a','GIF87a'].includes(data.toString('ascii',0,6)))return 'gif';
+ if(data.length>=12&&data.toString('ascii',4,8)==='ftyp'&&['avif','avis'].includes(data.toString('ascii',8,12)))return 'avif';
+ return null;
+}
+function sameOrigin(req){try{const origin=req.headers.origin;if(!origin)return false;return new URL(origin).host===req.headers.host;}catch{return false;}}
 const attempts=new Map();
 const html=readFileSync(new URL('./index.html',import.meta.url));
+const pdfScript=readFileSync(new URL('./pdf-vector.js',import.meta.url));
 const server=createServer(async(req,res)=>{
   const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`),path=url.pathname;
-  if(path==='/health'){json(res,200,{ok:true,database:'sqlite',cloud:true});return;}
-  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:8});return;}
+  if(path==='/health'){json(res,200,{ok:true,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true});return;}
+  if(path==='/pdf-vector.js'&&(req.method==='GET'||req.method==='HEAD')){
+    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-cache, must-revalidate','X-Content-Type-Options':'nosniff'});
+    res.end(req.method==='HEAD'?'':pdfScript);return;
+  }
+  if(path==='/api/assets'&&req.method==='POST'){
+    if(!getActor(req)){json(res,401,{error:'Login required'});return;}
+    if(!sameOrigin(req)){json(res,403,{error:'Origin not allowed'});return;}
+    const declared=Number(req.headers['content-length']||0);
+    if(declared>MAX_ASSET){json(res,413,{error:'Image is larger than 50 MB; original was not modified'});return;}
+    const chunks=[];let count=0;
+    for await(const chunk of req){count+=chunk.length;if(count>MAX_ASSET){json(res,413,{error:'Image exceeds 50 MB; no compression was applied'});return;}chunks.push(chunk);}
+    const raw=Buffer.concat(chunks,count),ext=imageExtension(raw);
+    if(!ext){json(res,415,{error:'Unsupported image. Use the original JPEG, PNG, WebP, GIF or AVIF file.'});return;}
+    const hash=createHash('sha256').update(raw).digest('hex'),filename=hash+'.'+ext,target=join(assetsDir,filename);
+    if(!existsSync(target)){
+      const temp=join(assetsDir,'.upload-'+randomBytes(12).toString('hex'));
+      try{writeFileSync(temp,raw,{flag:'wx'});renameSync(temp,target);}
+      catch(err){try{if(existsSync(temp))unlinkSync(temp);}catch{};console.error('Asset write failed:',err);json(res,507,{error:'Image storage full or unavailable'});return;}
+    }
+    json(res,201,{url:'/api/assets/'+filename,sha256:hash,bytes:raw.length,mime:ASSET_TYPES[ext]});return;
+  }
+  if(path.startsWith('/api/assets/')&&(req.method==='GET'||req.method==='HEAD')){
+    if(!getActor(req)){json(res,401,{error:'Login required'});return;}
+    const match=/^\/api\/assets\/([a-f0-9]{64})\.(jpg|png|webp|gif|avif)$/.exec(path);
+    if(!match){json(res,404,{error:'Not found'});return;}
+    const filename=match[1]+'.'+match[2],target=join(assetsDir,filename);
+    if(!existsSync(target)){json(res,404,{error:'Image not found'});return;}
+    res.writeHead(200,{'Content-Type':ASSET_TYPES[match[2]],'Content-Length':statSync(target).size,'Cache-Control':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'});
+    if(req.method==='HEAD'){res.end();return;}createReadStream(target).pipe(res);return;
+  }
+  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:12});return;}
   if(path==='/api/login'&&req.method==='POST'){
     const ip=(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').toString().split(',')[0].trim();
     const current=attempts.get(ip)||{count:0,until:0};
@@ -162,4 +207,4 @@ server.on('upgrade',(req,socket,head)=>{
   if(head?.length)socket.emit('data',head);
 });
 setInterval(()=>{for(const [key,l] of locks)if(l.expires<now())locks.delete(key);},4000).unref();
-const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v8 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
+const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v12 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
