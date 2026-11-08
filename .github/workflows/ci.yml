@@ -16,4 +16,5 @@ jobs:
           node-version: '24'
       - run: node --check server.mjs && node --check backup-utils.mjs && node --check pdf-vector.js && node --check v13-core.js
       - run: npm test
+      - run: node tests/browser.mjs
       - run: docker build -t buonocanvas-ci .
