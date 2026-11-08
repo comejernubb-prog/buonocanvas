@@ -1089,7 +1089,7 @@ async function exportFile(kind){
   if(kind==='pdf'){
    if(!window.BuonoVectorPDF)throw new Error('Vector PDF engine not loaded');
    await document.fonts?.ready;
-   const blob=await window.BuonoVectorPDF.build({elements,bounds:b,background:doc().background,shapePath,arrowHead,arrowEnds,textLayout,textMeasure});
+   const blob=await window.BuonoVectorPDF.build({elements,bounds:b,background:doc().background,shapePath,arrowHead,arrowEnds,curveGeometry,textLayout,textMeasure});
    downloadBlob(blob,name+'.pdf');showToast('Vector PDF exported · lines and shapes remain editable vectors');return;
   }
   const svg=await outputSVGWithAssets(b,elements,transparent);
