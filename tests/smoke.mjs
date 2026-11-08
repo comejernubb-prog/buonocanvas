@@ -37,7 +37,7 @@ async function main(){try{
  // Verify the separate PDF writer outputs native vector operators and a valid PDF xref/trailer.
  const context={window:{},Blob,Uint8Array,TextEncoder,Number,Math,Array,Map,Set,console};vm.createContext(context);vm.runInContext(readFileSync(join(root,'pdf-vector.js'),'utf8'),context);
  const elements=[{id:'rect',type:'rectangle',x:1,y:1,w:120,h:50,stroke:'#141414',fill:'transparent',opacity:100,strokeWidth:6},{id:'curve',type:'arrow',x:5,y:20,w:160,h:60,stroke:'#ee5500',fill:'transparent',opacity:100,strokeWidth:2}];
- const output=await context.window.BuonoVectorPDF.build({elements,bounds:{x:0,y:0,w:300,h:180},background:'#ffffff',shapePath:e=>e.type==='rectangle'?`M${e.x} ${e.y}H${e.x+e.w}V${e.y+e.h}H${e.x}Z`:'M5 20 C40 50 100 10 165 80',arrowHead:()=> 'M150 65L165 80L153 75',arrowEnds:()=>({}),textLayout:()=>({}),textMeasure:()=>({})});
+ const output=await context.window.BuonoVectorPDF.build({elements,bounds:{x:0,y:0,w:300,h:180},background:'#ffffff',shapePath:e=>e.type==='rectangle'?`M${e.x} ${e.y}H${e.x+e.w}V${e.y+e.h}H${e.x}Z`:'M5 20 C40 50 100 10 165 80',arrowHead:()=> 'M150 65L165 80L153 75',arrowEnds:()=>({a:{x:5,y:20},b:{x:165,y:80}}),textLayout:()=>({}),textMeasure:()=>({})});
  const pdf=Buffer.from(await output.arrayBuffer()),str=pdf.toString('latin1');assert.ok(str.startsWith('%PDF-1.4'));assert.ok(str.includes(' c\n')&&str.includes(' S\n')||str.includes('S\n'));assert.ok(str.includes('xref\n'));
  console.log('Smoke tests passed: auth, original uploads, full photo/database backup and vector PDF.');
 }finally{app.kill('SIGTERM');rmSync(temp,{recursive:true,force:true});}}
