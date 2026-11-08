@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node --check server.mjs",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs && node tests/v13.mjs"
   }
 }

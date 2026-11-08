@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { gzipSync, brotliCompressSync, constants as zc } from 'node:zlib';
 import { randomBytes, createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { downloadFullBackup, scheduleSqliteSnapshots } from './backup-utils.mjs';
 
 // Single Railway replica + one persistent volume. The volume is the source of truth.
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
@@ -71,9 +72,19 @@ function sendStatic(req,res,asset,type,extra={}){
 }
 const htmlAsset=prepareStatic('./index.html');
 const pdfAsset=prepareStatic('./pdf-vector.js');
+const v13Asset=prepareStatic('./v13-core.js');
+let backupInProgress=false;
 async function handle(req,res){
   const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`),path=url.pathname;
-  if(path==='/health'){json(res,200,{ok:true,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true});return;}
+  if(path==='/health'){json(res,200,{ok:true,version:13,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true,editablePNG:true,backup:true});return;}
+  if(path==='/v13-core.js'&&(req.method==='GET'||req.method==='HEAD')){
+    sendStatic(req,res,v13Asset,'text/javascript; charset=utf-8');return;
+  }
+  if(path==='/api/backup'&&req.method==='GET'){
+    if(!getActor(req)){json(res,401,{error:'Login required'});return;}
+    if(backupInProgress){json(res,429,{error:'Another backup is already being prepared'});return;}
+    backupInProgress=true;try{await downloadFullBackup(db,dataDir,res);}catch(e){console.error('Full backup failed:',e);if(!res.headersSent)json(res,500,{error:'Backup failed'});else res.destroy();}finally{backupInProgress=false;}return;
+  }
   if(path==='/pdf-vector.js'&&(req.method==='GET'||req.method==='HEAD')){
     sendStatic(req,res,pdfAsset,'text/javascript; charset=utf-8');return;
   }
@@ -237,3 +248,4 @@ process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
 process.on('unhandledRejection',err=>console.error('Unhandled rejection',err));
 process.on('uncaughtException',err=>console.error('Uncaught exception',err));
 const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v13 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
+scheduleSqliteSnapshots(db,dataDir);

@@ -1,4 +1,41 @@
-# buonocanvas v13 — Trackpad / mouse / Apple Pencil input, stable sessions, modern sticky notes
+# buonocanvas v13 — Drawing, image and export upgrade + touch/Pencil input, stable sessions, Excalidraw-style notes and text
+
+A minimal architecture-first infinite canvas with live collaboration, original image asset storage, SVG/PNG/PDF export and a SQLite cloud workspace on Railway. v13 is an incremental upgrade based on reviewing Excalidraw's publicly available implementation, not a replacement of the BUONOCANVAS engine.
+
+## v13 capabilities
+
+| Group | Capabilities |
+| --- | --- |
+| A1 | Solid/dashed/dotted stroke; configurable dash length, spacing, line cap and line join |
+| B1 | Independent source/target arrowhead styles: none, open arrow, triangle, dot, ring, diamond, bar |
+| B2/B3 | Adaptive curved connector hit testing; preserve two-knot Bézier editing and the eight-port shape binding model |
+| C1 | Original byte-preserving multiple-image imports for the supported formats; never resample originals on upload |
+| C2 | Non-destructive percentage crop, 0/90/180/270-degree rotation and horizontal/vertical flip |
+| C3 | Cull images far outside the viewport; original assets remain privately cacheable |
+| D1 | Entire canvas, current viewport or selected elements; adjustable margin and transparency for raster/SVG |
+| D2 | 1×/2×/4× bitmap export presets capped at 16,384 px per side / 32 megapixels for browser safety |
+| D3 | Native vector strokes, arrowheads and shapes in direct PDF; Unicode ActualText annotations for raster glyphs; browser Print PDF option for selectable text when the print engine and fonts support it |
+| D4 | Editable PNG with versioned iTXt JSON metadata: import the PNG again to recreate editable canvas elements |
+| E1 | Independent v13 geometry/PNG module, backup module, smoke tests and automated GitHub CI |
+| E2 | Daily rotating SQLite snapshots on /data, plus an authenticated full tar.gz archive of the database AND all original asset bytes |
+
+### Data integrity and backup
+
+- **Production data is preserved.** The app continues to use one SQLite database at `/data/buonocanvas.sqlite` and SHA-256 original assets under `/data/assets`. No destructive data migration is needed.
+- **Download Full Backup** in the Export dialog produces an authenticated `.tar.gz` containing the consistent SQLite snapshot, `assets/` directory and a `manifest.json`. Store the downloaded file **outside Railway**. The automatic `/data/backups/snapshot-YYYY-MM-DD.sqlite` copies are kept for up to seven days but are on the **same** persistent volume; they are NOT offsite backups and contain only the database.
+- Download or print a PDF for finished handoff. For the most dependable text selection and Thai font embedding, choose **Print PDF**, then select Save as PDF in a modern browser. The direct-download PDF preserves existing glyph appearance as raster images and adds accessibility ActualText metadata; not all PDF viewers use this for text selection.
+- **Editable PNG is not an offline image archive.** It embeds the editable board structure with asset URLs referencing the current authenticated BUONOCANVAS server. The recipient must have access to those assets. Use Full Backup to preserve every original image byte; use `.buonocanvas.json` as an additional editable scene backup.
+- A PNG edited, recompressed or processed by another application may lose its editability metadata. This is a deliberate opt-in export; avoid embedding confidential canvas data in publicly shared images.
+
+### Deployment and verification
+
+- Railway service `buonocanvas-github` tracks GitHub `main`, Dockerfile builds with Node 24, and attaches the existing `/data` volume.
+- All migrations are additive in the object model. Existing `boards` and `elements` tables remain unchanged.
+- Run `npm test` for authentication, original bytes, backup and vector PDF smoke tests plus image geometry and editable PNG validation.
+- Changes must pass CI before merging to `main`.
+
+---
+
 
 A minimalist real-time shared infinite canvas. Source: GitHub; deployment: Railway; boards: SQLite on the attached `/data` persistent volume; live collaboration: WebSocket with object revisions.
 
@@ -31,6 +68,10 @@ A minimalist real-time shared infinite canvas. Source: GitHub; deployment: Railw
 - Rendering is incremental: per-element DOM cache, only changed objects are re-parsed, pan/zoom only changes one transform, inspector/board list skip identical re-renders.
 
 **Sticky notes**: rounded card, layered soft shadow, hairline border, word-wrapped text (Prompt 500), pastel colour rotation + colour row in the Inspector, auto-grow height when the text is longer than the card, PDF export matches. Notes no longer use the stroke thickness controls.
+
+---
+
+# buonocanvas v12 — Original-image fidelity, vector PDF, editable line thickness
 
 ## v12 changes
 
