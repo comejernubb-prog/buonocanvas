@@ -2,6 +2,14 @@
 
 A minimalist real-time shared infinite canvas. Source: GitHub; deployment: Railway; boards: SQLite on the attached `/data` persistent volume; live collaboration: WebSocket with object revisions.
 
+## v13.1 changes
+
+- **Sticky notes (Excalidraw design)**: square 250 px warm-yellow paper (`#FFDF6B`; pink, green, blue, orange picks), 4% corner radius, hard 3 px shadow at 16% plus hairline edge, centred label auto-fitted from the chosen size (default 28) down to 16 px, and a creation-date footer ("9 Nov"). Click to place, or drag to size it; typing starts immediately. Corner-resizing keeps it square and scales the text (Shift resizes freely); the note grows taller when text no longer fits.
+- **Text (Excalidraw behaviour)**: new text is auto-width (grows while typing, no wrapping) until you drag a side handle, which fixes the width and wraps; corners scale the type. Double-click empty canvas to add text, double-click / Enter on a rectangle, diamond, ellipse or triangle to add a centred label, Enter edits the selected text/note. Esc or Ctrl/Cmd+Enter **finishes** editing (it no longer discards). Left / centre / right alignment in the text bar. Labels and note footers are exported to PDF.
+- **Shift axis lock**: drawing a line/arrow or dragging its end with Shift locks to 0° / 45° / 90°, shows a dashed guide and an angle chip, skips port snapping and keeps a straight connector straight. Shift-dragging objects moves them along one axis.
+- **Middle mouse + wheel**: middle-drag panning is incremental with a 4 px start threshold and ignores movement while the wheel is spinning, so pressing the wheel while scrolling no longer makes the view jump. Wheel device (mouse vs trackpad) is decided once per scroll burst so a fast scroll can't flip between zoom and pan.
+- Contextual hints under the toolbar (as in the reference).
+
 ## v13 changes
 
 **Input (mouse, trackpad, Apple Pencil)**

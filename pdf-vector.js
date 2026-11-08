@@ -79,6 +79,15 @@ async function imageResource(src,metadata={}){
   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(bmp,0,0);const img=ctx.getImageData(0,0,width,height);return await rawImageData(img.data,width,height);
  }finally{bmp?.close?.();}
 }
+// Rasterise a centred label (sticky note text + date footer, or the label inside a shape) at high resolution.
+function labelGlyph(el,L){
+ const b=L.box,scale=Math.min(2.5,4096/Math.max(1,b.w,b.h)),w=Math.max(1,Math.ceil(b.w*scale)),h=Math.max(1,Math.ceil(b.h*scale));
+ const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.scale(scale,scale);ctx.translate(-b.x,-b.y);
+ ctx.fillStyle=el.stroke&&el.stroke!=='transparent'?el.stroke:'#1E1E1E';ctx.textBaseline='alphabetic';ctx.textAlign='center';
+ ctx.font=`${L.fontWeight||500} ${L.fontSize}px Prompt,Arial,sans-serif`;L.lines.forEach((line,i)=>ctx.fillText(line,L.cx,L.baseline+i*L.lineHeight));
+ if(L.footer){ctx.textAlign='right';ctx.font='12px Helvetica,Arial,sans-serif';ctx.fillText(L.footer.text,L.footer.x,L.footer.y);}
+ return {canvas,b};
+}
 function formatTextGlyph(el,textLayout,textMeasure,noteLayout){
  const isNote=el.type==='note';const b=isNote?{x:Math.min(el.x,el.x+el.w),y:Math.min(el.y,el.y+el.h),w:Math.abs(el.w),h:Math.abs(el.h)}:textMeasure(el);
  const scale=Math.min(2.5,4096/Math.max(1,b.w,b.h));const w=Math.max(1,Math.ceil(b.w*scale)),h=Math.max(1,Math.ceil(b.h*scale));
@@ -86,7 +95,7 @@ function formatTextGlyph(el,textLayout,textMeasure,noteLayout){
  ctx.fillStyle=el.stroke||'#111111';ctx.textBaseline='alphabetic';
  if(isNote&&noteLayout){const L=noteLayout(el);ctx.font=`500 ${L.fontSize}px Prompt,Arial,sans-serif`;L.lines.forEach((line,i)=>ctx.fillText(line,L.b.x+16,L.b.y+16+L.fontSize*1.1+i*L.lineHeight));}
  else if(isNote){const f=el.fontSize||24;ctx.font=`700 ${f}px Prompt,Arial,sans-serif`;(el.text||'').split('\n').forEach((line,i)=>ctx.fillText(line, b.x+14,b.y+f+14+i*f*1.3));}
- else if(el.textBoxVersion===2){const layout=textLayout(el);ctx.font=`${layout.fontWeight} ${layout.fontSize}px Prompt,Arial,sans-serif`;layout.lines.forEach((line,i)=>ctx.fillText(line, el.x+layout.pad,el.y+layout.pad+layout.fontSize*1.1+i*layout.lineHeight));}
+ else if(el.textBoxVersion===2){const layout=textLayout(el);ctx.font=`${layout.fontWeight} ${layout.fontSize}px Prompt,Arial,sans-serif`;ctx.textAlign=layout.align==='center'?'center':layout.align==='right'?'right':'left';layout.lines.forEach((line,i)=>ctx.fillText(line, layout.anchorX??(el.x+layout.pad),el.y+layout.pad+layout.fontSize*1.1+i*layout.lineHeight));}
  else {const font=el.fontSize||24;ctx.save();ctx.translate(el.x,el.y);ctx.scale(el.textScaleX||1,el.textScaleY||1);ctx.font=`700 ${font}px Prompt,Arial,sans-serif`;(el.text||'').split('\n').forEach((line,i)=>ctx.fillText(line,0,font+i*font*1.38));ctx.restore();}
  return {canvas,b};
 }
@@ -111,7 +120,7 @@ function makePdfWriter(){
  };
  return {push,set,stream,encode};
 }
-async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,textLayout,textMeasure,noteLayout}){
+async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,textLayout,textMeasure,noteLayout,labelLayout}){
  if(!Array.isArray(elements)||!bounds||bounds.w<=0||bounds.h<=0)throw new Error('Invalid canvas');
  const scale=Math.min(.75,14400/bounds.w,14400/bounds.h),W=bounds.w*scale,H=bounds.h*scale;
  const pdf=makePdfWriter(),catalog=pdf.push(''),pages=pdf.push(''),page=pdf.push(''),contentId=pdf.push('');
@@ -150,13 +159,15 @@ async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,t
    placeImage(images.get(el.src),box,el.opacity);continue;
   }
   if(type==='text'||type==='note'){
-   if(type==='note')drawPath(pdfShapePath(el,shapePath),el.fill&&el.fill!=='transparent'?el.fill:'#FFE9A8',null,0,el.opacity);
-   const {canvas,b}=formatTextGlyph(el,textLayout,textMeasure,noteLayout);
-   if(!el.text?.trim())continue;
+   if(type==='note'){drawPath(pdfShapePath({...el,x:el.x+3,y:el.y+3},shapePath),'#000000',null,0,(el.opacity??100)*.16);drawPath(pdfShapePath(el,shapePath),el.fill&&el.fill!=='transparent'?el.fill:'#FFDF6B',null,0,el.opacity);}
+   const note=type==='note'&&labelLayout,L=note?labelLayout(el):null;
+   if(!el.text?.trim()&&!L?.footer)continue;
+   const {canvas,b}=note?labelGlyph(el,L):formatTextGlyph(el,textLayout,textMeasure,noteLayout);
    const rgba=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,canvas.width,canvas.height);
    const name=await addImage(await rawImageData(rgba.data,canvas.width,canvas.height));placeImage(name,b,el.opacity);continue;
   }
   drawPath(pdfShapePath(el,shapePath),el.fill,el.stroke,w,el.opacity,el.dash);
+  if(labelLayout&&el.text?.trim()&&['rectangle','diamond','ellipse','triangle'].includes(type)){const {canvas,b}=labelGlyph(el,labelLayout(el));const rgba=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,canvas.width,canvas.height);placeImage(await addImage(await rawImageData(rgba.data,canvas.width,canvas.height)),b,el.opacity);}
   if(type==='arrow')drawPath(svgPathToPdf(arrowHead(el)),null,el.stroke,w,el.opacity);
   if(type==='line'){
    const {a,b}=arrowEnds(el),r=Math.max(3.5,w*1.8);
