@@ -76,7 +76,7 @@ const v13Asset=prepareStatic('./v13-core.js');
 let backupInProgress=false;
 async function handle(req,res){
   const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`),path=url.pathname;
-  if(path==='/health'){json(res,200,{ok:true,version:13,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true,editablePNG:true,backup:true});return;}
+  if(path==='/health'){json(res,200,{ok:true,version:14,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true,editablePNG:true,backup:true});return;}
   if(path==='/v13-core.js'&&(req.method==='GET'||req.method==='HEAD')){
     sendStatic(req,res,v13Asset,'text/javascript; charset=utf-8');return;
   }
@@ -114,7 +114,7 @@ async function handle(req,res){
     res.writeHead(200,{'Content-Type':ASSET_TYPES[match[2]],'Content-Length':statSync(target).size,'Cache-Control':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'});
     if(req.method==='HEAD'){res.end();return;}createReadStream(target).pipe(res);return;
   }
-  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:13});return;}
+  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:14});return;}
   if(path==='/api/login'&&req.method==='POST'){
     const ip=(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').toString().split(',')[0].trim();
     const current=attempts.get(ip)||{count:0,until:0};
@@ -247,5 +247,5 @@ function shutdown(){console.log('Shutting down');for(const c of clients){try{c.s
 process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
 process.on('unhandledRejection',err=>console.error('Unhandled rejection',err));
 process.on('uncaughtException',err=>console.error('Uncaught exception',err));
-const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v13 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
+const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v14 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
 scheduleSqliteSnapshots(db,dataDir);
