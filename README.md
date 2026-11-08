@@ -1,68 +1,35 @@
-# buonocanvas v8 — Cloud Collaboration
+# buonocanvas v12 — Original-image fidelity, vector PDF, editable line thickness
 
-Local-first visual whiteboard, upgraded to a **shared, authenticated cloud workspace**. The source is on GitHub; Railway deploys the web service. A Railway volume mounted at `/data` stores the SQLite database (`/data/buonocanvas.sqlite`) across restarts and deployments.
+A minimalist real-time shared infinite canvas. Source: GitHub; deployment: Railway; boards: SQLite on the attached `/data` persistent volume; live collaboration: WebSocket with object revisions.
+
+## v12 changes
+
+- **Exact thickness**: contextual stepper `−  [number] px  +` changes stroke width on selected Arrow, Line, Rectangle, Diamond, Ellipse, Triangle, Pencil and Note; applies to all selected drawable shapes. Works for new shapes via the active tool's default thickness. Supported range: **0.5–48 canvas px**, increments **0.5 px**. The Inspector has the same numeric stepper. Stroke widths remain stored per object and synchronized between collaborators.
+- **Original-image storage**: new JPEG, PNG, WebP, GIF and AVIF files (when browser can decode them) are saved to `/data/assets` as **unchanged original byte sequences**, keyed by SHA-256 hash. **No resizing, resampling, quality reduction or transcoding on ingest**, including drag/drop and copy/paste (the OS/browser controls what bytes a clipboard paste actually supplies). Server accepts up to **50 MiB per image** and returns an explicit error otherwise instead of silently degrading images. The image's visual display size inside a board remains editable independently of its native resolution.
+- **Image sharing**: Canvas JSON stores a small authenticated `/api/assets/<sha>.<ext>` reference rather than a large embedded base64 string. Other authorized browsers fetch the same exact file. Download original returns the stored bytes and retains source format. Legacy data-URL images are still rendered but the previous reduced images **cannot** be retroactively restored.
+- **JPEG export**: exports the selected scope at **up to 4096 px on the longest side**, using quality **0.90** and max 2× the design-space pixel size. This intentionally optimizes the **export** file size; it does *not* change the originals retained in Cloud assets.
+- **PDF export**: a browser-side native PDF writer emits **real vector path commands** (`m`, `l`, `c`, `re`, `S`, `B`, etc.) for rectangles, ellipse, triangle, arrows/lines and cubic Bézier paths. JPEG images embed the same original JPEG encoded bytes in an `/Image` XObject (DCTDecode). PNG/WebP/GIF/AVIF are rendered *losslessly* into FlateDecode image XObjects; animated images use their current still frame. Text is drawn into a high-resolution transparent image so its original Prompt/Thai appearance does not require shipping font binaries—**text is raster in PDF; drawing strokes and shapes are vector**. For editable text, use the canvas's JSON export or SVG when supported by the consumer.
+- **SVG export**: reference images are included as original bytes in data URLs, so the file remains portable and can be opened offline.
+- **Triangle tool**: a simple triangle vector shape, customizable in the same way as other geometry.
 
 ## Deployment
 
-Docker image: `node:24-alpine` with Node built-in `node:sqlite` and a small RFC6455 WebSocket implementation (zero production npm dependencies). Run the service as **one replica only** because the database and live room state are process-local. Health endpoint: `GET /health`.
+Single Railway replica, `node:24-alpine`, zero external production dependencies. Requires:
 
-Required Railway environment variables (set in Railway Settings, **not** GitHub):
-
-- `APP_PASSWORD`: shared team workspace access code, 12+ characters
-- `SESSION_SECRET`: random secret, 32+ characters; changing it signs all devices out
+- `APP_PASSWORD`: existing access code, minimum 8 characters (do **not** commit it to GitHub)
+- `SESSION_SECRET`: at least 32 characters (keep existing value)
 - `NODE_ENV=production`
+- `DATA_DIR=/data` and persistent Railway volume at `/data` (keep existing data, do not detach/replace)
 
-Volume: `buonocanvas-data`, attached to the service at `/data`. Set `DATA_DIR=/data` if your service does not supply the `RAILWAY_VOLUME_MOUNT_PATH` automatically.
+Endpoints: `GET /health`, `POST /api/login`, `GET /api/session`, authenticated `POST /api/assets` and authenticated `GET /api/assets/<sha>.<ext>`, WebSocket `/ws`.
 
-## Collaboration protocol
+**Security**: an authenticated session cookie is required to upload/download images; uploads validate the Origin, constrain payload size, inspect magic bytes, and use immutable SHA-256 filenames. The shared workspace password provides the same access to all boards and assets. The 500 MB volume is finite and is **not** an independent offsite backup. Configure Railway volume backups separately. Large-image uploads may exhaust it; the app rejects failures explicitly instead of altering the original file.
 
-- All devices authenticate using the same workspace code. Sessions are signed HttpOnly cookies with 30-day expiry.
-- Each browser tab gets a distinct WebSocket actor ID. Server snapshots initialize canvases on connect; updates are sent via WebSocket using per-canvas / per-element deltas.
-- Persistent SQLite holds boards, live element JSON, immutable revision counters (including deleted-object tombstones), and a lightweight audit trail.
-- Editing different elements concurrently merges automatically at the **object level**.
-- Editing the **same** element: a short, renewable 12-second in-memory edit lease is attempted at drag start. The server checks both lease and the base element revision atomically before committing. A conflicting edit is rejected, the client reloads the authoritative object, and the user sees a conflict message. **No silent last-writer-wins overwriting**.
-- Text editing, grouping, images and arrows are synchronized as elements. Other devices see committed/streamed changes. Undo/Redo stacks remain per browser session; remote edits are rebased into local history so Ctrl+Z cannot erase someone else's objects.
-- Presence (participant count, name) and live pointer positions are delivered over WebSocket; offline editing is paused on disconnect to avoid split-brain edits. Reconnect always resynchronizes from the server.
+**Format limits**: 50 MiB maximum per asset; image export bounded to 4096 px JPEG; PDF non-JPEG image conversion has a browser-memory safety ceiling of ~35 megapixels. For unusually large projects, prefer original image downloads and vector SVG export. PDF viewer image decoding depends on supported formats and browser capabilities. Modern browsers with `CompressionStream('deflate')` are required to export PDFs containing non-JPEG photos or rendered text.
 
-## Important limits
+## Verification performed
 
-- One shared workspace password: **everyone with this secret can edit every canvas**; there are no per-user accounts or permission levels. Rotate secret in Railway when access should be revoked.
-- A single Railway instance is required; not a high-availability multi-node CRDT deployment. Service redeploys may briefly disconnect collaborators.
-- Embedded image data are stored in SQLite JSON. Each image/element payload is capped at **8 MB**; WebSocket messages max **16 MB**. For large architectural image boards, migrate assets to object storage.
-- The access code should be shared securely, not committed to the repository.
-- Protect `/data/buonocanvas.sqlite` using Railway volume backups. A volume survives deployments but a single volume is not itself a separate offsite backup.
-- This build intentionally starts with a **new cloud dataset**; legacy localStorage boards are not migrated.
-
-## Local testing
-
-```bash
-APP_PASSWORD='replace-with-12-plus-characters' SESSION_SECRET='replace-with-32-plus-characters' DATA_DIR=./data npm start
-```
-
-Open `http://localhost:3000`, enter your access code, and open another browser / private context to collaborate. All device-specific pan and zoom positions remain local; canvas objects, titles, backgrounds and grid are shared.
-
-
-## v10 — Smooth Bézier connector editing
-
-- There is **one Arrow tool**. No separate Straight/Bent mode and no floating connector-mode menu or editor hint.
-- Draw an arrow normally, then **double-click the arrow line** to enter curve-edit mode.
-- The connector is rendered as three continuously joined **cubic Bézier** segments through two draggable inner knots.
-- Drag either large inner knot to bend the stroke into an arc or S-curve, or drag the stroke itself to move the nearest knot.
-- Four small violet tangent handles let you refine curvature. Dragging one mirrors its opposite handle, maintaining a smooth join.
-- Start/end anchors remain attached to shapes and images; arrowheads follow the terminal curve's tangent.
-- Existing v9 arrow data remains readable. Previously saved bend points now render as smooth curves. Existing cloud/database/WebSocket protocol is unchanged; optional per-object `curveTangents` are persisted within the current JSON schema.
-- Editing works at browser zoom levels using screen-space hit detection; SVG export retains Bézier geometry. Undo/Redo preserves node and tangent edits.
-
-Validation: Node JavaScript syntax check and automated Chromium pointer tests for double-click activation, knot drag, tangent drag, direct-line drag, moving attached objects, and hiding the removed UI.
-
-## v11 — Compact single-row toolbar and shared connector editor
-
-- The drawing toolbar now sits **inside the top header** on the same row as the menu, compact infinity logo, cloud status, and actions. The canvas starts directly below a **40px header**; no separate floating toolbar or extra logo strip. Narrow displays can horizontally scroll the toolbar.
-- Arrow and Line are now both editable **smooth cubic Bézier connectors**.
-- Newly drawn arrows and lines have **one editable midpoint knot** (initially collinear, so visually straight). Drag this midpoint to curve the connector immediately.
-- **Double-click the stroke** (or its selected midpoint) to insert a second knot. Afterward, both knots and their mirrored tangent handles can be dragged to create continuous S-curves. No separate Straight/Bent selector.
-- Lines retain the same stroke editing behavior as arrows, but **render circular endpoint markers at both ends** instead of an arrowhead.
-- Both types can snap endpoint bindings to shape/image ports, keep connections on object movement, and retain knot geometry through cloud sync.
-- Existing older documents with 0 or 2 stored bends remain readable; this is a front-end-only change and leaves the SQLite/WebSocket backend, sessions, and Railway volume untouched.
-
-Testing performed: JavaScript syntax validation and browser interaction checks for desktop toolbar layout, Arrow and Line midpoint drags, double-click adding a second knot, tangent editing, endpoint circles, and responsive layout code review.
+- `node --check` for server, front-end script and PDF writer.
+- Local Node HTTP API: authorization, same-origin validation, raw upload and readback; SHA-256 of a 3600×2200 JPEG was identical before and after the server upload.
+- PDF writer: generated native vector PDF; inspected via PyMuPDF and confirmed vector drawing commands and embedded JPEG XObject with **byte-identical original JPEG payload**.
+- Automated full-browser UI tests were **not available** in this container because Chromium is configured with a managed `URLBlocklist: ["*"]` policy. Perform a two-device manual acceptance check after deployment.
