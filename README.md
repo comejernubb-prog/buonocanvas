@@ -1,3 +1,20 @@
+# buonocanvas v14 — Excalidraw-style arrows
+
+## v14 changes (arrows & lines)
+
+Arrows and lines were rebuilt on the model of Excalidraw's linear elements. **Arrowhead styles (none, open, triangle, dot, ring, diamond, bar) and the exact stroke-width controls are unchanged.**
+
+- **Binding to shapes**: an end binds to any shape it is dropped on or near (≈16 px). The arrow end sits on the shape's real outline (rectangle, ellipse, diamond, triangle, note, text, image) with a 5 px gap, on the line from the bind point towards the next point, so arrows always *point at* the shape and slide around its outline when either shape moves. The target shows a highlighted outline and a focus dot while you drag.
+- **Precise ("inside") binding**: keep the pointer still deep inside a shape for 0.7 s and the end pins exactly to that point (filled focus dot).
+- **Multi-point drawing**: drag to draw a two-point arrow, or click to start, click to add points, and finish with Enter, Esc, a double-click, a click on the last point or a click onto a shape.
+- **Editing**: every point has a handle; drag the small ○ between two points to insert one; double-click a point to remove it; double-click the line to add a point there. Ends rebind/unbind as you drag them.
+- **Arrow types**: Sharp (straight segments), Curved (smooth curve through the points) and Elbow (orthogonal routing out of the bound sides, snapping to side midpoints), switchable from the floating stroke bar or the Inspector. New arrows default to Curved, new lines to Sharp.
+- **Modifiers**: Shift locks the segment to 0° · 45° · 90° (dashed guide + angle chip); Ctrl/Cmd or Alt draws without binding.
+- **Compatibility**: v12/v13 arrows (x/y/w/h + bends + 8-port anchors) render and bind as before (ports become outline bindings aimed at the same spot) and are only converted to the new point list when you edit them; nothing is rewritten just by opening a board. Old Bézier tangent handles are dropped when a curved legacy arrow is edited; it becomes a smooth curve through the same points.
+- Arrow labels and elbow-segment dragging (both in Excalidraw) are not implemented yet.
+
+---
+
 # buonocanvas v13 — Drawing, image and export upgrade + touch/Pencil input, stable sessions, Excalidraw-style notes and text
 
 A minimal architecture-first infinite canvas with live collaboration, original image asset storage, SVG/PNG/PDF export and a SQLite cloud workspace on Railway. v13 is an incremental upgrade based on reviewing Excalidraw's publicly available implementation, not a replacement of the BUONOCANVAS engine.
