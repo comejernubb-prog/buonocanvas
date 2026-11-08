@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync, existsSync, writeFileSync, createReadStream, s
 import { join } from 'node:path';
 import { randomBytes, createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { downloadFullBackup, scheduleSqliteSnapshots } from './backup-utils.mjs';
 
 // Single Railway replica + one persistent volume. The volume is the source of truth.
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data';
@@ -57,9 +58,20 @@ function sameOrigin(req){try{const origin=req.headers.origin;if(!origin)return f
 const attempts=new Map();
 const html=readFileSync(new URL('./index.html',import.meta.url));
 const pdfScript=readFileSync(new URL('./pdf-vector.js',import.meta.url));
+const v13Script=readFileSync(new URL('./v13-core.js',import.meta.url));
+let backupInProgress=false;
 const server=createServer(async(req,res)=>{
   const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`),path=url.pathname;
-  if(path==='/health'){json(res,200,{ok:true,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true});return;}
+  if(path==='/health'){json(res,200,{ok:true,version:13,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true,editablePNG:true,backup:true});return;}
+  if(path==='/v13-core.js'&&(req.method==='GET'||req.method==='HEAD')){
+    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-cache, must-revalidate','X-Content-Type-Options':'nosniff'});
+    res.end(req.method==='HEAD'?'':v13Script);return;
+  }
+  if(path==='/api/backup'&&req.method==='GET'){
+    if(!getActor(req)){json(res,401,{error:'Login required'});return;}
+    if(backupInProgress){json(res,429,{error:'Another backup is already being prepared'});return;}
+    backupInProgress=true;try{await downloadFullBackup(db,dataDir,res);}catch(e){console.error('Full backup failed:',e);if(!res.headersSent)json(res,500,{error:'Backup failed'});else res.destroy();}finally{backupInProgress=false;}return;
+  }
   if(path==='/pdf-vector.js'&&(req.method==='GET'||req.method==='HEAD')){
     res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-cache, must-revalidate','X-Content-Type-Options':'nosniff'});
     res.end(req.method==='HEAD'?'':pdfScript);return;
@@ -90,7 +102,7 @@ const server=createServer(async(req,res)=>{
     res.writeHead(200,{'Content-Type':ASSET_TYPES[match[2]],'Content-Length':statSync(target).size,'Cache-Control':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'});
     if(req.method==='HEAD'){res.end();return;}createReadStream(target).pipe(res);return;
   }
-  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:12});return;}
+  if(path==='/api/session'){json(res,200,{authenticated:!!getActor(req),version:13});return;}
   if(path==='/api/login'&&req.method==='POST'){
     const ip=(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').toString().split(',')[0].trim();
     const current=attempts.get(ip)||{count:0,until:0};
@@ -207,4 +219,5 @@ server.on('upgrade',(req,socket,head)=>{
   if(head?.length)socket.emit('data',head);
 });
 setInterval(()=>{for(const [key,l] of locks)if(l.expires<now())locks.delete(key);},4000).unref();
-const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v12 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
+const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`buonocanvas cloud v13 listening on ${port}; persistent database at ${dataDir}; boards ${stmt.listBoards.all().length}`));
+scheduleSqliteSnapshots(db,dataDir);
