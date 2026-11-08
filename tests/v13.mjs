@@ -18,7 +18,7 @@ assert.ok(lib.markerSvg('circle_outline',{x:10,y:12},{x:1,y:0},2,'#333333').incl
 assert.equal(lib.markerSvg('none',{x:10,y:12},{x:1,y:0},2,'#000000'),'');
 assert.equal(lib.strokeDash({dash:'dashed',strokeWidth:3,dashLength:12,dashGap:5}),'12 5');
 assert.equal(lib.strokeDash({dash:'solid'}),'none');
-assert.deepEqual(lib.imageBounds({x:0,y:0,w:100,h:200,rotation:90}),{x:-50,y:50,w:200,h:100});
+const rotated=lib.imageBounds({x:0,y:0,w:100,h:200,rotation:90});for(const [key,value] of Object.entries({x:-50,y:50,w:200,h:100}))assert.ok(Math.abs(rotated[key]-value)<1e-7,key+' rotated image bounds');
 const img=lib.imageSvg({type:'image',x:0,y:0,w:100,h:60,src:'/api/assets/abc.png',crop:{x:.2,y:.1,w:.7,h:.8},rotation:90,flipX:true},v=>v);
 assert.ok(img.includes('rotate(90)')&&img.includes('viewBox=')&&img.includes('overflow="hidden"'));
 
