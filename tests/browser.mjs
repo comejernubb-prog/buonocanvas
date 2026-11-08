@@ -33,7 +33,7 @@ try{
  await until(()=>evaluate('!!document.querySelector("#cloudLogin")'),'initial UI');
  await evaluate('document.querySelector("#cloudPassword").value="local-test-password-23";document.querySelector("#cloudLogin").requestSubmit();true');
  await until(()=>evaluate('document.querySelector("#cloudGate")?.classList.contains("hidden") && document.querySelector("#cloudIndicator")?.classList.contains("connected")'),'cloud login + WebSocket',150);
- const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/tAAAAABJRU5ErkJggg==';
+ const png='iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGPcEiDyn4GBgYGJAQoAIEgCG7rNw8IAAAAASUVORK5CYII=';
  const upload='(()=>{const bytes=Uint8Array.from(atob("'+png+'"),c=>c.charCodeAt(0));const input=document.querySelector("#imageInput");const transfer=new DataTransfer();transfer.items.add(new File([bytes],"smoke.png",{type:"image/png"}));input.files=transfer.files;input.dispatchEvent(new Event("change",{bubbles:true}));return true})()';
  await evaluate(upload);
  await until(()=>evaluate('document.querySelector("#elementCount")?.textContent?.startsWith("1 ")'),'image imported',120);
