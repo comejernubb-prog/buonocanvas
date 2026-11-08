@@ -30,9 +30,9 @@ try{
  ws.onmessage=e=>{const msg=JSON.parse(e.data);if(msg.id&&pending.has(msg.id)){const p=pending.get(msg.id);pending.delete(msg.id);if(msg.error)p.reject(Error(msg.error.message));else p.resolve(msg);}};
  await rpc('Page.enable');await rpc('Runtime.enable');
  await rpc('Page.setDownloadBehavior',{behavior:'allow',downloadPath:downloads});
- await until(()=>evaluate('!!document.querySelector("#cloudLogin")'),'initial UI');
+ await until(()=>evaluate('!!document.querySelector("#cloudLogin") && document.querySelectorAll("#toolbar .tool").length>5 && document.querySelector("#cloudMessage")?.textContent?.includes("Enter the access code")'),'completed app initialization');
  await evaluate('document.querySelector("#cloudPassword").value="local-test-password-23";document.querySelector("#cloudLogin").requestSubmit();true');
- await until(()=>evaluate('document.querySelector("#cloudGate")?.classList.contains("hidden") && document.querySelector("#cloudIndicator")?.classList.contains("connected")'),'cloud login + WebSocket',150);
+ try{await until(()=>evaluate('document.querySelector("#cloudGate")?.classList.contains("hidden") && document.querySelector("#cloudIndicator")?.classList.contains("connected")'),'cloud login + WebSocket',150);}catch(err){console.error('Login diagnostic',await evaluate('JSON.stringify({gate:document.querySelector("#cloudGate")?.className,message:document.querySelector("#cloudMessage")?.textContent,save:document.querySelector("#saveLabel")?.textContent,session:document.cookie,toolbar:document.querySelectorAll("#toolbar .tool").length})'));throw err;}
  const png='iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGPcEiDyn4GBgYGJAQoAIEgCG7rNw8IAAAAASUVORK5CYII=';
  const upload='(()=>{const bytes=Uint8Array.from(atob("'+png+'"),c=>c.charCodeAt(0));const input=document.querySelector("#imageInput");const transfer=new DataTransfer();transfer.items.add(new File([bytes],"smoke.png",{type:"image/png"}));input.files=transfer.files;input.dispatchEvent(new Event("change",{bubbles:true}));return true})()';
  await evaluate(upload);
