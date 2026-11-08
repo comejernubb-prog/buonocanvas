@@ -1,0 +1,19 @@
+name: BUONOCANVAS CI
+on:
+  push:
+    branches: ["main", "upgrade/**"]
+  pull_request:
+    branches: ["main"]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check server.mjs && node --check backup-utils.mjs && node --check pdf-vector.js && node --check v13-core.js
+      - run: npm test
+      - run: docker build -t buonocanvas-ci .
