@@ -1,6 +1,6 @@
 {
   "name": "buonocanvas",
-  "version": "12.0.0",
+  "version": "13.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node --check server.mjs",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs && node tests/v13.mjs"
   }
 }
