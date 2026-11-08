@@ -6,6 +6,7 @@
 (() => {
 'use strict';
 const TE=new TextEncoder();
+const V13=window.BuonoV13||null;
 const num=n=>Number.isFinite(Number(n))?Number(Number(n).toFixed(4)).toString():'0';
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 function color(value){
@@ -110,7 +111,7 @@ function makePdfWriter(){
  };
  return {push,set,stream,encode};
 }
-async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,textLayout,textMeasure}){
+async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,curveGeometry,textLayout,textMeasure}){
  if(!Array.isArray(elements)||!bounds||bounds.w<=0||bounds.h<=0)throw new Error('Invalid canvas');
  const scale=Math.min(.75,14400/bounds.w,14400/bounds.h),W=bounds.w*scale,H=bounds.h*scale;
  const pdf=makePdfWriter(),catalog=pdf.push(''),pages=pdf.push(''),page=pdf.push(''),contentId=pdf.push('');
@@ -129,14 +130,23 @@ async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,t
   pdf.set(id,pdf.stream(`/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /${img.filter}`+(maskId?` /SMask ${maskId} 0 R`:''),img.data));
   const name='Im'+(++counter);imageNames.push(`/${name} ${id} 0 R`);return name;
  }
- function placeImage(name,box,opacity){commands.push('q\n'+graphicsAlpha(opacity)+`${num(box.w)} 0 0 ${num(-box.h)} ${num(box.x)} ${num(box.y+box.h)} cm\n/${name} Do\nQ\n`);}
- function drawPath(path,fill,stroke,width,opacity,dash='solid'){
+ function placeImage(name,box,opacity,el=null){
+  let cmd='q\n'+graphicsAlpha(opacity);
+  if(el&&(el.rotation||el.flipX||el.flipY)){const angle=(Number(el.rotation)||0)*Math.PI/180,co=Math.cos(angle),si=Math.sin(angle),fx=el.flipX?-1:1,fy=el.flipY?-1:1,cx=box.x+box.w/2,cy=box.y+box.h/2,a=co*fx,b=si*fx,c=-si*fy,d=co*fy;
+    cmd+=`${num(a)} ${num(b)} ${num(c)} ${num(d)} ${num(cx-a*cx-c*cy)} ${num(cy-b*cx-d*cy)} cm\n`;}
+  const crop=V13?.cropValues(el||{})||{x:0,y:0,w:1,h:1};
+  if(el?.crop){cmd+=`${num(box.x)} ${num(box.y)} ${num(box.w)} ${num(box.h)} re\nW n\n`;}
+  const iw=box.w/crop.w,ih=box.h/crop.h,x=box.x-crop.x*iw,y=box.y-crop.y*ih;
+  cmd+=`${num(iw)} 0 0 ${num(-ih)} ${num(x)} ${num(y+ih)} cm\n/${name} Do\nQ\n`;commands.push(cmd);
+ }
+ function utf16Hex(text){let hex='FEFF';for(let i=0;i<text.length;i++)hex+=text.charCodeAt(i).toString(16).padStart(4,'0');return hex;}
+ function drawPath(path,fill,stroke,width,opacity,dash='solid',style={}){
   if(!path)return;
   const f=color(fill),s=color(stroke);if(!f&&!s)return;
   let cmd='q\n'+graphicsAlpha(opacity);
   if(f)cmd+=setColor(fill,false);
-  if(s)cmd+=setColor(stroke,true)+`${num(Math.max(.1,width))} w\n1 J\n1 j\n`;
-  if(s&&dash==='dashed')cmd+='[9 7] 0 d\n';else if(s&&dash==='dotted')cmd+='[2 7] 0 d\n';
+  if(s){const cap={butt:0,round:1,square:2}[style.lineCap]??1,join={miter:0,round:1,bevel:2}[style.lineJoin]??1;cmd+=setColor(stroke,true)+`${num(Math.max(.1,width))} w\n${cap} J\n${join} j\n`;}
+  if(s&&dash==='dashed')cmd+=`[${num(clamp(Number(style.dashLength)||9,.5,200))} ${num(clamp(Number(style.dashGap)||7,.5,200))}] 0 d\n`;else if(s&&dash==='dotted')cmd+=`[${num(Math.max(.5,width*.7))} ${num(clamp(Number(style.dashGap)||7,.5,200))}] 0 d\n`;
   cmd+=path+(f&&s?'B\n':f?'f\n':'S\n')+'Q\n';commands.push(cmd);
  }
  drawPath(`${num(bounds.x)} ${num(bounds.y)} ${num(bounds.w)} ${num(bounds.h)} re\n`,background||'#ffffff',null,0,100);
@@ -146,20 +156,22 @@ async function build({elements,bounds,background,shapePath,arrowHead,arrowEnds,t
    if(!el.src)continue;
    if(!images.has(el.src))images.set(el.src, await addImage(await imageResource(el.src,el)));
    const box={x:Math.min(el.x,el.x+el.w),y:Math.min(el.y,el.y+el.h),w:Math.abs(el.w),h:Math.abs(el.h)};
-   placeImage(images.get(el.src),box,el.opacity);continue;
+   placeImage(images.get(el.src),box,el.opacity,el);continue;
   }
   if(type==='text'||type==='note'){
-   if(type==='note')drawPath(pdfShapePath(el,shapePath),el.fill,el.stroke,w,el.opacity,el.dash);
+   if(type==='note')drawPath(pdfShapePath(el,shapePath),el.fill,el.stroke,w,el.opacity,el.dash,el);
    const {canvas,b}=formatTextGlyph(el,textLayout,textMeasure);
    if(!el.text?.trim())continue;
    const rgba=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,canvas.width,canvas.height);
-   const name=await addImage(await rawImageData(rgba.data,canvas.width,canvas.height));placeImage(name,b,el.opacity);continue;
+   const name=await addImage(await rawImageData(rgba.data,canvas.width,canvas.height));commands.push('/Span << /ActualText <'+utf16Hex(el.text)+' > >> BDC\n');placeImage(name,b,el.opacity);commands.push('EMC\n');continue;
   }
-  drawPath(pdfShapePath(el,shapePath),el.fill,el.stroke,w,el.opacity,el.dash);
-  if(type==='arrow')drawPath(svgPathToPdf(arrowHead(el)),null,el.stroke,w,el.opacity);
-  if(type==='line'){
-   const {a,b}=arrowEnds(el),r=Math.max(3.5,w*1.8);
-   for(const point of [a,b])drawPath(pdfCircle(point.x,point.y,r),'#ffffff',el.stroke,Math.max(1.35,w*.72),el.opacity);
+  drawPath(pdfShapePath(el,shapePath),el.fill,el.stroke,w,el.opacity,el.dash,el);
+  if(type==='arrow'||type==='line'){
+   const ends=arrowEnds(el),geo=curveGeometry?.(el),first=geo?.segments?.[0],last=geo?.segments?.at(-1),a=ends.a,b=ends.b;
+   const handles=[{type:el.startMarker||(type==='line'?'circle_outline':'none'),point:a,direction:first?{x:first.p0.x-first.c1.x,y:first.p0.y-first.c1.y}:{x:a.x-b.x,y:a.y-b.y}},
+    {type:el.endMarker||(type==='line'?'circle_outline':'arrow'),point:b,direction:last?{x:last.p1.x-last.c2.x,y:last.p1.y-last.c2.y}:{x:b.x-a.x,y:b.y-a.y}}];
+   for(const h of handles){const m=V13?.markerPath(h.type,h.point,h.direction,w);if(!m){if(h.type==='arrow'&&!V13)drawPath(svgPathToPdf(arrowHead(el)),null,el.stroke,w,el.opacity);continue;}
+    if(m.circle)drawPath(pdfCircle(m.circle.cx,m.circle.cy,m.circle.r),m.fill?el.stroke:'#ffffff',el.stroke,w,el.opacity);else drawPath(svgPathToPdf(m.path),m.fill?el.stroke:null,el.stroke,w,el.opacity);}
   }
  }
  // A single graphics-state matrix flips the Y axis into SVG's top-down coordinate system.
