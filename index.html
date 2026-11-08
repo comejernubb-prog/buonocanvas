@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#FAFAFA" />
   <meta name="description" content="BUONOCANVAS – minimal infinite canvas for architecture, design and ideas." />
-  <title>buonocanvas v10 — Smooth Bézier Connectors</title>
+  <title>buonocanvas v13 — Precision Drawing & Export</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='19' fill='%23EC6426'/%3E%3Cpath d='M21 15v34h18c15 0 14-19 0-19H21' fill='none' stroke='%23FDE3CF' stroke-width='8' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -427,12 +427,14 @@ body{font-family:Prompt,Arial,Helvetica,sans-serif;color:var(--text);letter-spac
   <button id="cloudLoginButton" type="submit">Enter creative space →</button><div id="cloudMessage" class="cloud-message" aria-live="polite"></div>
   <div class="cloud-footer"><span>BUONOCANVAS 10.0</span><span>SECURE CLOUD WORKSPACE</span></div>
 </form></div>
+<script src="/v13-core.js"></script>
 <script src="/pdf-vector.js"></script>
 <script>
 (() => {
 'use strict';
 const NS='http://www.w3.org/2000/svg', KEY='buonocanvas:v1';
-const COLOR={orange:'#F14B3B',yellow:'#F8A91F',cream:'#F5F5F5',brown:'#1D1D1D',white:'#FFFFFF',transparent:'transparent',black:'#111111'};
+const V13=window.BuonoV13;
+ const COLOR={orange:'#F14B3B',yellow:'#F8A91F',cream:'#F5F5F5',brown:'#1D1D1D',white:'#FFFFFF',transparent:'transparent',black:'#111111'};
 const PALETTE=[COLOR.black,'#686868','#BDBDBD',COLOR.white,COLOR.orange,'transparent'];
 const ICON={
  selection:'<path d="m5 3 14 9-7 1-3 7z"/>',hand:'<path d="M7 12V7a2 2 0 0 1 4 0v3-5a2 2 0 0 1 4 0v5-3a2 2 0 0 1 4 0v6c0 5-3 8-8 8h-1c-3 0-5-2-7-6l-1-2c-1-2 1-4 3-3l2 2"/>',
@@ -448,7 +450,7 @@ const $=(q)=>document.querySelector(q), $$=(q)=>[...document.querySelectorAll(q)
 const esc=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const genId=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const now=()=>new Date().toISOString();
-function s(type,x,y,w,h,stroke=COLOR.brown,fill='transparent',extras={}) { return {id:genId(),type,x,y,w,h,stroke,fill,strokeWidth:2.5,opacity:100,dash:'solid',rough:1,fontSize:24,text:'',...extras}; }
+function s(type,x,y,w,h,stroke=COLOR.brown,fill='transparent',extras={}) { return {id:genId(),type,x,y,w,h,stroke,fill,strokeWidth:2.5,opacity:100,dash:'solid',dashLength:9,dashGap:7,lineCap:'round',lineJoin:'round',startMarker:type==='line'?'circle_outline':'none',endMarker:type==='arrow'?'arrow':type==='line'?'circle_outline':'none',rough:1,fontSize:24,text:'',...extras}; }
 const seed=()=>{ const elements=[
  s('text',105,72,900,58,COLOR.black,'transparent',{text:'SPACE TO THINK.',fontSize:58,rough:0}),
  s('text',106,146,680,24,'#777777','transparent',{text:'A minimal canvas for ideas, diagrams & design.',fontSize:20,rough:0}),
@@ -467,7 +469,7 @@ const seed=()=>{ const elements=[
 ];return {id:genId(),name:'Welcome to buonocanvas',updatedAt:now(),elements,pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false};};
 // Cloud-only state; old browser-only boards intentionally are not imported.
 let store={docs:[{id:'bootstrap',name:'Connecting to cloud…',updatedAt:now(),elements:[],pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false}],currentId:'bootstrap'};
-let state={...store,anchorHover:null,activeAnchor:null,arrowEditId:null,tool:'selection',selected:[],gesture:null,guides:[],space:false,clipboard:[],pasteSerial:0,history:[],future:[],defaultStyle:{stroke:COLOR.black,fill:'transparent',strokeWidth:2.5,opacity:100,dash:'solid',rough:0,fontSize:24},drawing:false};
+let state={...store,anchorHover:null,activeAnchor:null,arrowEditId:null,tool:'selection',selected:[],gesture:null,guides:[],space:false,clipboard:[],pasteSerial:0,history:[],future:[],defaultStyle:{stroke:COLOR.black,fill:'transparent',strokeWidth:2.5,opacity:100,dash:'solid',dashLength:9,dashGap:7,lineCap:'round',lineJoin:'round',startMarker:'none',endMarker:'arrow',rough:0,fontSize:24},drawing:false};
 const doc=()=>state.docs.find(x=>x.id===state.currentId)||state.docs[0];
 let savedTimer=null,toastTimer=null,editor=null,raf=0;
 const cloud={ready:false,online:false,actor:'',socket:null,known:new Map(),inFlight:null,flushTimer:null,retryTimer:null,queueStamp:0,locks:new Map(),localLocks:new Set(),remoteCursors:new Map(),members:[],lastCursor:0,requestId:0};
@@ -668,7 +670,7 @@ function bbox(e){if(isConnector(e)){
  const g=curveGeometry(e),pts=g?[...g.points,...g.segments.flatMap(s=>[s.c1,s.c2])]:arrowPoints(e);
  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys);
  return{x,y,w:Math.max(1,Math.max(...xs)-x),h:Math.max(1,Math.max(...ys)-y)};
- }if(e.type==='pencil'){let p=e.points||[];if(!p.length)return {x:e.x,y:e.y,w:0,h:0};let minx=Math.min(...p.map(p=>p.x)),maxx=Math.max(...p.map(p=>p.x)),miny=Math.min(...p.map(p=>p.y)),maxy=Math.max(...p.map(p=>p.y));return {x:minx,y:miny,w:maxx-minx,h:maxy-miny};}if(e.type==='text'||e.type==='note'){let b=e.type==='text'?textMeasure(e):null;if(b)return b;}return {x:Math.min(e.x,e.x+e.w),y:Math.min(e.y,e.y+e.h),w:Math.abs(e.w),h:Math.abs(e.h)};}
+ }if(e.type==='pencil'){let p=e.points||[];if(!p.length)return {x:e.x,y:e.y,w:0,h:0};let minx=Math.min(...p.map(p=>p.x)),maxx=Math.max(...p.map(p=>p.x)),miny=Math.min(...p.map(p=>p.y)),maxy=Math.max(...p.map(p=>p.y));return {x:minx,y:miny,w:maxx-minx,h:maxy-miny};}if(e.type==='text'||e.type==='note'){let b=e.type==='text'?textMeasure(e):null;if(b)return b;}return e.type==='image'?V13.imageBounds(e):{x:Math.min(e.x,e.x+e.w),y:Math.min(e.y,e.y+e.h),w:Math.abs(e.w),h:Math.abs(e.h)};}
 const textMeasureCanvas=document.createElement('canvas').getContext('2d');
 const textWordSegmenter=typeof Intl!=='undefined'&&Intl.Segmenter?new Intl.Segmenter('th',{granularity:'word'}):null;
 function textLayout(e){
@@ -705,17 +707,18 @@ function shapePath(e){let {x,y,w,h}=e, l=Math.min(x,x+w),r=Math.max(x,x+w),t=Mat
  return '';
 }
 function arrowHead(e){const pts=arrowPoints(e),end=pts.at(-1);let tail=pts.at(-2);const geo=curveGeometry(e);if(geo)tail=geo.segments.at(-1).c2;let dx=end.x-tail.x,dy=end.y-tail.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,sz=Math.max(11,(e.strokeWidth||2)*5),x=end.x,y=end.y;return `M${x-ux*sz-uy*sz*.44} ${y-uy*sz+ux*sz*.44}L${x} ${y}L${x-ux*sz+uy*sz*.44} ${y-uy*sz-ux*sz*.44}`;}
-function elementSVG(e,exportMode=false){const color=esc(e.stroke||COLOR.brown),fill=esc(e.fill||'transparent'),width=Number(e.strokeWidth)||2,opacity=(e.opacity??100)/100,dash=e.dash==='dashed'?'9 7':e.dash==='dotted'?'2 7':'none';const base=`fill="${fill}" stroke="${color}" stroke-width="${width}" opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dash}"`;
+function connectorMarkersSVG(e){const geo=curveGeometry(e),{a,b}=arrowEnds(e),first=geo?.segments?.[0],last=geo?.segments?.at(-1),startV=first?{x:first.p0.x-first.c1.x,y:first.p0.y-first.c1.y}:{x:a.x-b.x,y:a.y-b.y},endV=last?{x:last.p1.x-last.c2.x,y:last.p1.y-last.c2.y}:{x:b.x-a.x,y:b.y-a.y};const w=Number(e.strokeWidth)||2,color=e.stroke||'#222222';return V13.markerSvg(e.startMarker||(e.type==='line'?'circle_outline':'none'),a,startV,w,color)+V13.markerSvg(e.endMarker||(e.type==='line'?'circle_outline':'arrow'),b,endV,w,color);}
+function elementSVG(e,exportMode=false){const color=esc(e.stroke||COLOR.brown),fill=esc(e.fill||'transparent'),width=Number(e.strokeWidth)||2,opacity=(e.opacity??100)/100;const base=`fill="${fill}" stroke="${color}" stroke-width="${width}" opacity="${opacity}" stroke-linecap="${['butt','square','round'].includes(e.lineCap)?e.lineCap:'round'}" stroke-linejoin="${['miter','bevel','round'].includes(e.lineJoin)?e.lineJoin:'round'}" stroke-dasharray="${V13.strokeDash(e)}"`;
  const id=exportMode?'':`data-id="${esc(e.id)}"`;
  if(e.type==='text'){
   if(e.textBoxVersion===2){const l=textLayout(e),b=textMeasure(e);return `<g ${id} opacity="${editor?.id===e.id&&!exportMode?0:opacity}">${exportMode?'':`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent"/>`}<text x="${e.x+l.pad}" y="${e.y+l.pad+l.fontSize*1.1}" font-family="Prompt, Arial, sans-serif" font-size="${l.fontSize}" font-weight="${l.fontWeight}" fill="${color}" style="white-space:pre">${l.lines.map((txt,n)=>`<tspan x="${e.x+l.pad}" dy="${n?l.lineHeight:0}">${esc(txt||' ')}</tspan>`).join('')}</text></g>`;}
   let font=e.fontSize||24,lines=(e.text||'').split('\n'),b=textMeasure(e),sx=e.textScaleX||1,sy=e.textScaleY||1;return `<g ${id} opacity="${editor?.id===e.id&&!exportMode?0:opacity}">${exportMode?'':`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent"/>`}<g transform="translate(${e.x} ${e.y}) scale(${sx} ${sy})"><text x="0" y="${font}" font-family="Prompt, Arial, sans-serif" font-size="${font}" font-weight="700" fill="${color}" style="white-space:pre">${lines.map((txt,n)=>`<tspan x="0" dy="${n?font*1.38:0}">${esc(txt||' ')}</tspan>`).join('')}</text></g></g>`;
  }
- if(e.type==='image')return `<g ${id} opacity="${opacity}"><image href="${esc(e.src||'')}" x="${Math.min(e.x,e.x+e.w)}" y="${Math.min(e.y,e.y+e.h)}" width="${Math.abs(e.w)}" height="${Math.abs(e.h)}" preserveAspectRatio="none" /></g>`;
+ if(e.type==='image')return `<g ${id}>${V13.imageSvg(e,esc)}</g>`;
  let inner=`<path d="${shapePath(e)}" ${base}/>`;
  if(e.type==='note'){let font=e.fontSize||24;inner+=`<text x="${Math.min(e.x,e.x+e.w)+14}" y="${Math.min(e.y,e.y+e.h)+font+14}" font-size="${font}" font-weight="700" font-family="Prompt, Arial, sans-serif" fill="${color}" style="white-space:pre">${(e.text||'').split('\n').map((line,n)=>`<tspan x="${Math.min(e.x,e.x+e.w)+14}" dy="${n?font*1.3:0}">${esc(line||' ')}</tspan>`).join('')}</text>`;}
- if(e.type==='arrow')inner+=`<path d="${arrowHead(e)}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`;
- if(e.type==='line'){const {a,b}=arrowEnds(e),radius=Math.max(3.5,width*1.8);for(const p of [a,b])inner+=`<circle cx="${p.x}" cy="${p.y}" r="${radius}" fill="#fff" stroke="${color}" stroke-width="${Math.max(1.35,width*.72)}" opacity="${opacity}" />`;}
+ if(e.type==='arrow')inner+=connectorMarkersSVG(e);
+ if(e.type==='line')inner+=connectorMarkersSVG(e);
  if(!exportMode&&(e.type==='line'||e.type==='arrow'||e.type==='pencil'))inner=`<path d="${shapePath(e)}" fill="none" stroke="transparent" stroke-width="${Math.max(14,width+8)}"/>`+inner;
  return `<g ${id}>${inner}</g>`;
 }
@@ -938,7 +941,7 @@ function canvasDown(e){if(e.button!==0&&e.button!==1)return;if(e.button===1)e.pr
  if(tool==='text'||tool==='note'){
   checkpoint();let n=tool==='note'?s('note',p.x,p.y,230,142,state.defaultStyle.stroke,COLOR.yellow,{fontSize:20,rough:0}):s('text',p.x,p.y,170,45,state.defaultStyle.stroke,'transparent',{fontSize:state.defaultStyle.fontSize,textBoxVersion:2,fontWeight:500});doc().elements.push(n);state.selected=[n.id];changed();state.gesture={mode:'beginText',id:n.id};setTool('selection');return;
  }
- let shape=s(tool,p.x,p.y,1,1,state.defaultStyle.stroke,['rectangle','ellipse','diamond','triangle'].includes(tool)?state.defaultStyle.fill:'transparent',{strokeWidth:state.defaultStyle.strokeWidth,opacity:state.defaultStyle.opacity,dash:state.defaultStyle.dash,rough:state.defaultStyle.rough,fontSize:state.defaultStyle.fontSize});if(tool==='pencil')shape.points=[p];if(isConnector(shape)){const snap=nearestAnchor(p,[],24);if(snap){shape.x=snap.point.x;shape.y=snap.point.y;shape.startBinding={elementId:snap.elementId,anchor:snap.anchor};state.activeAnchor=snap;}shape.rough=0;}checkpoint();doc().elements.push(shape);state.gesture={mode:'draw',start:{x:shape.x,y:shape.y},id:shape.id,shift:false};state.selected=[];changed();
+ let shape=s(tool,p.x,p.y,1,1,state.defaultStyle.stroke,['rectangle','ellipse','diamond','triangle'].includes(tool)?state.defaultStyle.fill:'transparent',{strokeWidth:state.defaultStyle.strokeWidth,opacity:state.defaultStyle.opacity,dash:state.defaultStyle.dash,dashLength:state.defaultStyle.dashLength,dashGap:state.defaultStyle.dashGap,lineCap:state.defaultStyle.lineCap,lineJoin:state.defaultStyle.lineJoin,startMarker:state.defaultStyle.startMarker,endMarker:tool==='line'?'circle_outline':state.defaultStyle.endMarker,rough:state.defaultStyle.rough,fontSize:state.defaultStyle.fontSize});if(tool==='pencil')shape.points=[p];if(isConnector(shape)){const snap=nearestAnchor(p,[],24);if(snap){shape.x=snap.point.x;shape.y=snap.point.y;shape.startBinding={elementId:snap.elementId,anchor:snap.anchor};state.activeAnchor=snap;}shape.rough=0;}checkpoint();doc().elements.push(shape);state.gesture={mode:'draw',start:{x:shape.x,y:shape.y},id:shape.id,shift:false};state.selected=[];changed();
 }
 function canvasMove(e){let g=state.gesture,p=mouseAt(e);if(['arrow','line'].includes(state.tool)||g?.mode==='draw'&&isConnector(doc().elements.find(x=>x.id===g.id))){const nearest=nearestAnchor(p,[],30),hit=hitTest(e);const newHover=nearest?.elementId||(doc().elements.find(x=>x.id===hit&&connectible(x))?.id)||null;if(state.anchorHover!==newHover){state.anchorHover=newHover;scheduleRender();}}if(!g)return;if(g.mode==='pan'){doc().pan={x:g.pan.x+(e.clientX-g.start.x),y:g.pan.y+(e.clientY-g.start.y)};scheduleRender();return;}
  if(g.mode==='marquee'){g.curr=p;scheduleRender();return;}
