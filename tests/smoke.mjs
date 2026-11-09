@@ -16,7 +16,10 @@ let failedLog='';app.stderr.on('data',v=>failedLog+=v.toString());
 async function waitForHealth(){for(let i=0;i<80;i++){try{const r=await fetch(base+'/health');if(r.ok)return;}catch{}await new Promise(r=>setTimeout(r,80));}throw Error('health endpoint failed: '+failedLog);}
 async function main(){try{
  await waitForHealth();
- const health=await (await fetch(base+'/health')).json();assert.equal(health.version,14);
+ const health=await (await fetch(base+'/health')).json();assert.equal(health.version,15);assert.equal(health.promptFont,true);
+ const fontCssRes=await fetch(base+'/fonts/prompt.css');assert.equal(fontCssRes.status,200);assert.match(fontCssRes.headers.get('content-type')||'',/text\/css/);const fontCss=await fontCssRes.text();assert.match(fontCss,/font-family:"Prompt"/);assert.match(fontCss,/prompt-thai-400-normal\.woff2/);
+ for(const subset of ['thai','latin']){const fontRes=await fetch(base+'/fonts/prompt-'+subset+'-400-normal.woff2');assert.equal(fontRes.status,200);assert.match(fontRes.headers.get('content-type')||'',/font\/woff2/);const fontBuffer=Buffer.from(await fontRes.arrayBuffer());assert.equal(fontBuffer.toString('ascii',0,4),'wOF2');assert.ok(fontBuffer.length>2000);}
+ assert.equal((await fetch(base+'/fonts/forbidden.woff2')).status,404);
  const publicScript=await fetch(base+'/v13-core.js');assert.equal(publicScript.status,200);assert.ok((await publicScript.text()).includes('embedEditablePng'));
  assert.equal((await fetch(base+'/api/backup')).status,401);
  const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'local-test-password-23'})});
