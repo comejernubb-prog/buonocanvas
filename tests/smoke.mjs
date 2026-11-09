@@ -22,8 +22,10 @@ async function main(){try{
  assert.equal((await fetch(base+'/fonts/forbidden.woff2')).status,404);
  const publicScript=await fetch(base+'/v13-core.js');assert.equal(publicScript.status,200);assert.ok((await publicScript.text()).includes('embedEditablePng'));
  assert.equal((await fetch(base+'/api/backup')).status,401);
+ assert.equal((await fetch(base+'/api/diagnostics')).status,401);
  const login=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'local-test-password-23'})});
  assert.equal(login.status,200);const cookie=login.headers.get('set-cookie')?.split(';')[0];assert.ok(cookie);
+ const diagRes=await fetch(base+'/api/diagnostics',{headers:{Cookie:cookie}});assert.equal(diagRes.status,200);const diag=await diagRes.json();assert.equal(diag.version,15);assert.ok(diag.promptFonts>=12);
  const original=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGPcEiDyn4GBgYGJAQoAIEgCG7rNw8IAAAAASUVORK5CYII=','base64');
  const forbidden=await fetch(base+'/api/assets',{method:'POST',headers:{Cookie:cookie,Origin:'https://evil.example','Content-Type':'image/png'},body:original});assert.equal(forbidden.status,403);
  const unauthorized=await fetch(base+'/api/assets',{method:'POST',headers:{Origin:base,'Content-Type':'image/png'},body:original});assert.equal(unauthorized.status,401);
