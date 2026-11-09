@@ -1,6 +1,6 @@
 {
   "name": "buonocanvas",
-  "version": "14.0.0",
+  "version": "15.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,6 +9,9 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node --check server.mjs",
-    "test": "node tests/smoke.mjs && node tests/v13.mjs && node --test tests/hit-testing.test.mjs"
+    "test": "node tests/smoke.mjs && node tests/v13.mjs && node --test tests/hit-testing.test.mjs && node --test tests/realtime-ui.test.mjs"
+  },
+  "dependencies": {
+    "@fontsource/prompt": "5.3.0"
   }
 }
