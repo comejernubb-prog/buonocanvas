@@ -126,3 +126,29 @@ Endpoints: `GET /health`, `POST /api/login`, `GET /api/session`, authenticated `
 ### Selection hit priority for overlapping connectors
 
 When an Arrow/Line runs across or close to a free Text Box, clicking inside the text's on-screen layout box selects the **text**, even if the connector's invisible SVG hit stroke or an editing handle is on top. The selection test is performed in world coordinates, so it works at different pan/zoom levels and on touch devices. Shapes/images on top retain their normal stacking behavior. Click an uncovered part of the connector to select and edit the line. No document, database, or sync format changes are required. Regression coverage: `tests/hit-testing.test.mjs`.
+
+## v15 — Reconnect reliability, Prompt typography, responsive rendering
+
+**Problems addressed**
+- A `Reconnecting…` bubble used to cover the top toolbar, especially on narrow displays.
+- iPad/Safari background-tab wake-ups used a four-second ping timeout and could falsely close healthy WebSocket sessions.
+- Every pointermove rebuilt the canvas inspector, board list, text controls, stroke controls, and hints even when only the viewport moved.
+- Google Fonts was fetched from a third-party host at runtime, producing a fallback font when blocked/unavailable.
+
+**Changes**
+- Prompt (Thai and Latin glyphs, weights 300–800) is installed from the OFL-1.1 licensed `@fontsource/prompt` package at build time and served by the **same Railway origin** under `/fonts/`. Browser font requests are cacheable.
+- The connection indicator lives near the **bottom-left**, is non-interactive, and appears only if a reconnect takes longer than 1.8 seconds. It never obscures drawing tools.
+- Browser WebSocket lifecycle is visibility-aware with an extended wake-up grace period, adaptive backoff and a guard against duplicate connection attempts.
+- The UI now paints the SVG each animation frame but batches expensive sidebar/inspector rebuilds. Image culling work is also throttled while panning/pinching.
+- Slow-client cursor data is discarded instead of piling up; important board edits are still sent and checked using object revisions.
+- Lost save acknowledgements trigger a full reconnect and safe revision-based replay rather than leaving the queue permanently stuck.
+- Authenticated `GET /api/diagnostics` exposes uptime, active connections and backpressure counters without revealing content or secrets.
+
+**Verification**
+- The Docker build runs the complete test suite **twice** before allowing a Railway deployment.
+- Tests cover authentication, database/image backup, original image bytes, PDF vector structures, Prompt WOFF2, client reconnect/visibility handling, throttled UI frame work, and an actual two-peer WebSocket editing/reconnect scenario.
+- Production remains a **single Railway replica** attached to the original `/data` volume; no database schema migration or record deletion is performed.
+
+**Operational limits**
+- Network interruptions cannot be eliminated. Pending edits are retained in the **current open browser tab** and replayed after reconnect; do not close the tab while offline.
+- Tests in the deployment environment do not replace physical device checks on every version of Windows, macOS and iPadOS.
