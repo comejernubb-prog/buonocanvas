@@ -7,9 +7,10 @@
   <meta name="description" content="BUONOCANVAS – minimal infinite canvas for architecture, design and ideas." />
   <title>buonocanvas v13 — Precision Drawing & Export</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='19' fill='%23EC6426'/%3E%3Cpath d='M21 15v34h18c15 0 14-19 0-19H21' fill='none' stroke='%23FDE3CF' stroke-width='8' stroke-linejoin='round'/%3E%3C/svg%3E" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Serve Prompt from this Railway origin; no third-party font request per device. -->
+  <link rel="preload" href="/fonts/prompt-thai-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/prompt-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/fonts/prompt.css" />
   <style>
     :root { --orange:#EC6426; --yellow:#F8A91F; --cream:#FDE3CF; --brown:#632713; --paper:#fff9f3; --bg:#faeee3; --soft:#fff4e9; --line:#edd8c7; --muted:#9b8073; --shadow:0 8px 28px rgba(99,39,19,.08); --text:#542717; }
     *{box-sizing:border-box} html,body{height:100%;margin:0} body{font-family:Inter,"Segoe UI",Arial,sans-serif;color:var(--text);background:var(--bg);overflow:hidden} button,input,textarea{font:inherit} button{cursor:pointer} button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--orange);outline-offset:2px} svg{display:block}
@@ -333,8 +334,10 @@ body{font-family:Prompt,Arial,Helvetica,sans-serif;color:var(--text);letter-spac
 
 /* v13: touch/pencil friendliness + non-blocking reconnect pill */
 .stage,#drawing{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
-#cloudBanner{position:fixed;left:50%;top:12px;transform:translate(-50%,-140%);z-index:60;padding:8px 14px;border-radius:999px;background:#1d1d1df2;color:#fff;font:600 12px/1.2 Prompt,Arial,sans-serif;box-shadow:0 6px 24px #0003;transition:transform .25s ease;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
-#cloudBanner.show{transform:translate(-50%,0)}
+/* Connection state belongs near the lower edge, never on top of drawing tools. */
+#cloudBanner{position:fixed;left:16px;bottom:46px;top:auto;transform:translateY(20px);z-index:12;padding:7px 11px;border-radius:10px;background:rgba(34,34,34,.92);color:#fff;font:500 11px/1.45 Prompt,"Noto Sans Thai",Arial,sans-serif;box-shadow:0 5px 16px #0002;transition:opacity .18s ease,transform .18s ease;opacity:0;pointer-events:none;max-width:min(350px,calc(100vw - 32px));text-align:left;overflow-wrap:anywhere}
+#cloudBanner.show{opacity:1;transform:translateY(0)}
+@media(max-width:650px){#cloudBanner{left:10px;bottom:55px;max-width:calc(100vw - 20px);font-size:10px}}
 
 .arrow-type-group{display:none;align-items:center;gap:4px}.stroke-bar.has-arrow .arrow-type-group{display:inline-flex}
 .stroke-step.arrow-type{display:inline-flex;align-items:center;justify-content:center}.stroke-step.arrow-type.active{background:#ecebff;border-color:#6965db66;color:#4a47b8}
@@ -502,9 +505,20 @@ function cloudGateway(message='',mode='login'){
  if(mode==='reconnecting'){$('#cloudLoginButton').textContent='Reconnecting…';}
  else{$('#cloudLoginButton').textContent='Enter creative space →';}
 }
-function wsSend(obj){if(!cloud.socket||cloud.socket.readyState!==WebSocket.OPEN)return false;cloud.socket.send(JSON.stringify(obj));return true;}
+function wsSend(obj){if(!cloud.socket||cloud.socket.readyState!==WebSocket.OPEN)return false;
+ // Remote cursors are ephemeral; don't make a slow Wi-Fi link block important edits.
+ if(obj.type==='cursor'&&cloud.socket.bufferedAmount>128*1024)return false;
+ cloud.socket.send(JSON.stringify(obj));return true;}
 function cloudKnown(id){return cloud.known.get(id);}
-function cloudBanner(msg){let el=$('#cloudBanner');if(!el){el=document.createElement('div');el.id='cloudBanner';el.setAttribute('role','status');document.body.appendChild(el);}if(msg){el.textContent=msg;requestAnimationFrame(()=>el.classList.add('show'));}else el.classList.remove('show');}
+let cloudBannerTimer=null;
+function cloudBanner(msg){
+ let el=$('#cloudBanner');if(!el){el=document.createElement('div');el.id='cloudBanner';el.setAttribute('role','status');document.body.appendChild(el);}
+ clearTimeout(cloudBannerTimer);
+ if(!msg){el.classList.remove('show');el.textContent='';return;}
+ // Avoid flashing a reconnect warning for ordinary sub-second mobile network transitions.
+ el.textContent=msg;el.classList.remove('show');
+ cloudBannerTimer=setTimeout(()=>{if(!cloud.online)el.classList.add('show');},1800);
+}
 function cloudRefreshFromServer(boards){
  const reconnect=cloud.synced,oldKnown=new Map(cloud.known),oldDocs=state.docs;
  const localViews=new Map(oldDocs.map(d=>[d.id,{pan:d.pan,zoom:d.zoom}]));
@@ -536,14 +550,20 @@ function cloudRefreshFromServer(boards){
  cloud.inFlight=null;renderAll();cloudSchedule(0);
 }
 function cloudSchedule(delay=160){if(!cloud.ready||!cloud.online)return;clearTimeout(cloud.flushTimer);cloud.flushTimer=setTimeout(cloudFlush,delay);showCloudStatus('Syncing…');}
-function cloudFlush(){if(!cloud.ready||!cloud.online||cloud.inFlight)return;
+function cloudFlush(){
+ if(!cloud.ready||!cloud.online)return;
+ if(cloud.inFlight){
+  // A lost acknowledgement must not leave every subsequent edit stuck behind one request.
+  if(Date.now()-(cloud.inFlight.sentAt||Date.now())>25000)cloud.socket?.close();
+  return;
+ }
  const docs=state.docs,ids=new Set(docs.map(d=>d.id));
  for(const [id,remote] of cloud.known){if(!ids.has(id)){
-   const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'boardDelete',boardId:id};
+   const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'boardDelete',boardId:id,sentAt:Date.now()};
    wsSend({type:'boardDelete',reqId,boardId:id,baseRev:remote.revision});return;
  }}
  for(const d of docs){if(!cloud.known.has(d.id)){
-   const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'boardCreate',boardId:d.id};
+   const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'boardCreate',boardId:d.id,sentAt:Date.now()};
    wsSend({type:'boardCreate',reqId,board:{id:d.id,name:d.name,background:d.background,grid:!!d.grid}});return;
  }}
  for(const d of docs){const remote=cloud.known.get(d.id);if(!remote)continue;
@@ -552,7 +572,7 @@ function cloudFlush(){if(!cloud.ready||!cloud.online||cloud.inFlight)return;
    for(const [id,obj] of current){const origin=existing.get(id);if(!origin||!objectEqual(cleanElement(origin),cleanElement(obj)))edits.push({id,baseRev:origin?origin._rev||0:0,value:cleanElement(obj)});}
    for(const [id,obj] of existing)if(!current.has(id))edits.push({id,baseRev:obj._rev||0,value:null});
    const meta=d.name!==remote.name||d.background!==remote.background||!!d.grid!==!!remote.grid?{name:d.name,background:d.background,grid:!!d.grid}:null;
-   if(edits.length||meta){const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'patch',boardId:d.id,ids:edits.map(x=>x.id)};
+   if(edits.length||meta){const reqId=`q${++cloud.requestId}`;cloud.inFlight={reqId,type:'patch',boardId:d.id,ids:edits.map(x=>x.id),sentAt:Date.now()};
      if(!wsSend({type:'patch',reqId,boardId:d.id,ops:edits,meta,baseMetaRev:remote.revision}))cloud.inFlight=null;
      return;
    }
@@ -591,7 +611,11 @@ function cloudReceived(msg){
  if(msg.type==='welcome'){
   cloud.actor=msg.actor;cloud.ready=true;cloud.online=true;cloud.members=msg.users||[];
   cloudRefreshFromServer(msg.boards||[]);cloud.synced=true;cloud.retries=0;$('#cloudGate').classList.add('hidden');cloudBanner('');showCloudStatus('Connected · Cloud ready');
-  clearInterval(cloud.heartbeat);cloud.heartbeat=setInterval(()=>{if(!cloud.online)return;if(Date.now()-cloud.lastPong>55000){cloud.socket?.close();return;}wsSend({type:'ping',t:Date.now()});},20000);return;
+  clearInterval(cloud.heartbeat);cloud.resumeGraceUntil=Date.now()+20000;
+  cloud.heartbeat=setInterval(()=>{if(!cloud.online||document.hidden)return;
+   if(Date.now()>cloud.resumeGraceUntil&&Date.now()-cloud.lastPong>95000){cloud.socket?.close();return;}
+   wsSend({type:'ping',t:Date.now()});
+  },25000);return;
  }
  if(msg.type==='presence'){cloud.members=msg.users||[];showCloudStatus();return;}
  if(msg.type==='boardCreated'){
@@ -629,32 +653,49 @@ function cloudReceived(msg){
 }
 function drawRemoteCursors(){const panel=$('#remoteCursors');if(!panel||!cloud.ready)return;const active=[...cloud.remoteCursors.values()].filter(c=>c.actor!==cloud.actor&&c.boardId===doc().id&&Date.now()-c.time<8000);
  panel.innerHTML=active.slice(0,15).map(c=>{const p=screenPoint(c.x,c.y);return `<div class="remote-pointer" style="left:${p.x}px;top:${p.y}px"><b class="arrowhead">⌖</b><span>${esc(c.name||'Collaborator')}</span></div>`;}).join('');}
-function sendCursor(e){const t=Date.now();if(!cloud.ready||t-cloud.lastCursor<80)return;cloud.lastCursor=t;const p=worldPoint(e);wsSend({type:'cursor',boardId:doc().id,x:p.x,y:p.y});}
+function sendCursor(e){const t=Date.now();if(!cloud.ready||document.hidden||t-cloud.lastCursor<125)return;cloud.lastCursor=t;const p=worldPoint(e);wsSend({type:'cursor',boardId:doc().id,x:p.x,y:p.y});}
 function cloudConnect(){
  clearTimeout(cloud.retryTimer);
- // After the first successful connection a drop never blocks the canvas: edits stay local and are merged on reconnect.
- if(cloud.synced)cloudBanner('Reconnecting… your edits are kept and will sync');else cloudGateway('Connecting to shared workspace…','reconnecting');
+ const previous=cloud.socket;
+ if(previous&&(previous.readyState===WebSocket.CONNECTING||previous.readyState===WebSocket.OPEN))return;
+ if(cloud.synced)cloudBanner('Connection interrupted · reconnecting. Keep this tab open to sync pending edits.');
+ else cloudGateway('Connecting to shared workspace…','reconnecting');
  showCloudStatus('Connecting…');
  const ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/ws');cloud.socket=ws;
- ws.onopen=()=>{cloud.lastPong=Date.now();wsSend({type:'intro',name:localStorage.getItem('bc_display_name')||'Collaborator'});};
- ws.onmessage=e=>{try{cloudReceived(JSON.parse(e.data));}catch(err){console.error('Cloud sync message',err);}};
+ // Don't let a half-open TCP upgrade remain forever in CONNECTING state.
+ const connectWatch=setTimeout(()=>{if(cloud.socket===ws&&ws.readyState===WebSocket.CONNECTING)ws.close();},16000);
+ ws.onopen=()=>{clearTimeout(connectWatch);if(cloud.socket!==ws){ws.close();return;}cloud.lastPong=Date.now();wsSend({type:'intro',name:localStorage.getItem('bc_display_name')||'Collaborator'});};
+ ws.onmessage=e=>{if(cloud.socket!==ws)return;try{cloudReceived(JSON.parse(e.data));}catch(err){console.error('Cloud sync message',err);}};
  ws.onerror=()=>{};
- ws.onclose=async()=>{if(cloud.socket!==ws)return;clearInterval(cloud.heartbeat);cloud.online=false;cloud.ready=false;cloud.inFlight=null;cloudUnlock();showCloudStatus('Offline · Reconnecting');
-  if(cloud.synced)cloudBanner('Offline · reconnecting… edits are kept locally');else cloudGateway('Connection interrupted; reconnecting…','reconnecting');
-  let authenticated=true;try{const r=await fetch('/api/session',{cache:'no-store'});authenticated=(await r.json()).authenticated;}catch{}
+ ws.onclose=async()=>{
+  clearTimeout(connectWatch);if(cloud.socket!==ws)return;
+  clearInterval(cloud.heartbeat);cloud.online=false;cloud.ready=false;cloud.inFlight=null;cloudUnlock();showCloudStatus('Offline · reconnecting');
+  if(cloud.synced)cloudBanner('Connection interrupted · reconnecting. Keep this tab open to sync pending edits.');
+  else cloudGateway('Connection interrupted; reconnecting…','reconnecting');
+  if(document.hidden)return; // Safari suspends network tabs: resume from visibilitychange instead.
+  let authenticated=true;
+  const ac=new AbortController(),timeout=setTimeout(()=>ac.abort(),4500);
+  try{const response=await fetch('/api/session',{cache:'no-store',signal:ac.signal});if(response.ok)authenticated=!!(await response.json()).authenticated;else if(response.status===401)authenticated=false;}catch{}finally{clearTimeout(timeout);}
+  if(cloud.socket!==ws)return;
   if(!authenticated){cloudBanner('');cloudGateway('Session expired. Please sign in again.');return;}
-  cloud.retryTimer=setTimeout(()=>cloudConnect(),Math.min(10000,800*Math.pow(1.7,cloud.retries++)));};
+  const delay=Math.min(30000,900*Math.pow(1.65,Math.min(cloud.retries++,8)))+Math.floor(Math.random()*350);
+  cloud.retryTimer=setTimeout(()=>{if(!document.hidden)cloudConnect();},delay);
+ };
 }
-function cloudWake(){if(document.hidden||!cloud.synced)return;
- if(!cloud.online){if(!cloud.socket||cloud.socket.readyState>=2){clearTimeout(cloud.retryTimer);cloud.retries=0;cloudConnect();}return;}
- const t0=Date.now();wsSend({type:'ping',t:t0});setTimeout(()=>{if(cloud.online&&cloud.lastPong<t0)cloud.socket?.close();},4000);}
+function cloudWake(){
+ if(document.hidden||!cloud.synced)return;
+ // Returning to an iPad/Safari tab is not proof of a dead socket. Give its network stack time to wake.
+ cloud.resumeGraceUntil=Date.now()+20000;
+ if(!cloud.online){if(!cloud.socket||cloud.socket.readyState>=WebSocket.CLOSING){clearTimeout(cloud.retryTimer);cloud.retries=0;cloudConnect();}return;}
+ if(cloud.socket?.readyState===WebSocket.OPEN)wsSend({type:'ping',t:Date.now()});
+}
 document.addEventListener('visibilitychange',cloudWake);window.addEventListener('online',cloudWake);
 async function initCloud(){const name=localStorage.getItem('bc_display_name')||'Designer';$('#cloudName').value=name;
  try{const r=await fetch('/api/session',{cache:'no-store'});if((await r.json()).authenticated){cloudConnect();return;}}catch{}
  cloudGateway('Enter the access code for this shared workspace.');
 }
 function persist(){cloudSchedule(170);}
-function changed(){doc().updatedAt=now();persist();scheduleRender();}
+function changed(){doc().updatedAt=now();persist();lastUiPaintKey='';scheduleRender();}
 function showToast(msg){let el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
 const HISTORY_LIMIT=60;
 // These stacks exist only in this loaded page (never localStorage). One pair per canvas.
@@ -901,7 +942,22 @@ function renderHint(){let el=$('#stageHint');if(!el){const wrap=$('.stage-wrap')
  else if(items.length)h='Shift-drag to move along one axis · Alt-drag duplicates';
  else h='Pan: two-finger scroll, middle-drag or Space-drag · Zoom: pinch, mouse wheel or Ctrl+scroll · Double-click to add text';
  if(h!==lastHint){lastHint=h;el.textContent=h;}}
-function scheduleRender(){if(cloud.ready&&state.gesture&&['draw','move','clone-move','resize','arrow-edit','erase'].includes(state.gesture.mode))cloudSchedule(140);if(!raf)raf=requestAnimationFrame(()=>{raf=0;renderCanvas();renderInspector();renderBoards();renderAlignBar();renderTextBar();renderStrokeBar();renderHint();drawRemoteCursors();});}
+// The canvas paints every animation frame, while expensive inspector/board/toolbar DOM rebuilding
+// is batched. This prevents style controls and the sidebar from being torn down 60x/second on iPad.
+let lastUiPaintAt=0,lastUiPaintKey='';
+function scheduleRender(){
+ if(cloud.ready&&state.gesture&&['draw','move','clone-move','resize','arrow-edit','erase'].includes(state.gesture.mode))cloudSchedule(170);
+ if(raf)return;
+ raf=requestAnimationFrame(t=>{
+  raf=0;renderCanvas();
+  const key=state.currentId+'|'+state.tool+'|'+state.selected.join(',')+'|'+(editor?.id||'')+'|'+(state.multiArrow?.id||'');
+  if(key!==lastUiPaintKey||t-lastUiPaintAt>(state.gesture?250:120)){
+   lastUiPaintKey=key;lastUiPaintAt=t;
+   renderInspector();renderBoards();renderAlignBar();renderTextBar();renderStrokeBar();renderHint();
+  }
+  drawRemoteCursors();
+ });
+}
 function renderTextBar(){let bar=$('#textBar'),items=state.selected.map(id=>doc().elements.find(e=>e.id===id)).filter(Boolean),el=items.length===1&&items[0].type==='text'?items[0]:null;bar.classList.toggle('visible',!!el&&!editor);if(!el)return;const size=el.fontSize||24;bar.querySelectorAll('[data-text-size]').forEach(b=>b.classList.toggle('active',Number(b.dataset.textSize)===size));bar.querySelectorAll('[data-text-align]').forEach(b=>b.classList.toggle('active',(el.textAlign||'left')===b.dataset.textAlign));let input=$('#textSizeNumber');if(document.activeElement!==input)input.value=Math.round(size);}
 function applyTextSize(size){size=clamp(Math.round(Number(size)),8,240);if(!Number.isFinite(size))return;const items=state.selected.map(id=>doc().elements.find(x=>x.id===id)).filter(x=>x?.type==='text');if(items.length){checkpoint();for(const el of items){if(el.textBoxVersion!==2){const old=textMeasure(el);el.textBoxVersion=2;el.textWidth=old.w;delete el.textScaleX;delete el.textScaleY;}el.fontSize=size;const b=textMeasure(el);el.w=b.w;el.h=b.h;}changed();}else{state.defaultStyle.fontSize=size;scheduleRender();}}
 
@@ -975,9 +1031,13 @@ function syncElementLayer(list){
  }
  for(const [id,rec] of elCache)if(!seen.has(id)){rec.node.remove();elCache.delete(id);}
 }
+let lastViewportElementSync=0;
 function renderCanvas(){let d=doc(),stage=$('#stage'),svg=$('#drawing'),w=stage.clientWidth,h=stage.clientHeight;ensureLayers(svg);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);stage.style.setProperty('--canvas-bg',d.background);if(d.grid){let sc=Math.max(5,24*d.zoom);stage.style.backgroundImage='radial-gradient(#d5d5d5 0.8px,transparent 0.8px)';stage.style.backgroundSize=sc+'px '+sc+'px';stage.style.backgroundPosition=`${d.pan.x}px ${d.pan.y}px`;}else{stage.style.backgroundImage='none';}viewportG.setAttribute('transform',`translate(${d.pan.x} ${d.pan.y}) scale(${d.zoom})`);const safePad=160/Math.max(.05,d.zoom),vx=-d.pan.x/d.zoom-safePad,vy=-d.pan.y/d.zoom-safePad,vw=w/d.zoom+safePad*2,vh=h/d.zoom+safePad*2;
  // Off-screen photos are left out of the DOM (unless selected) to keep huge boards light.
- syncElementLayer(d.elements.filter(e=>{if(e.type!=='image'||state.selected.includes(e.id))return true;const b=bbox(e);return b.x<=vx+vw&&b.x+b.w>=vx&&b.y<=vy+vh&&b.y+b.h>=vy;}));layerOv.innerHTML=`${snapGuideSVG()}${selectionSVG()}${anchorOverlaySVG()}${axisLockSVG()}${marqueeSVG()}`;$('#zoomValue').textContent=Math.round(d.zoom*100)+'%';$('#elementCount').textContent=d.elements.length+' ELEMENTS';}
+ if(!((state.gesture?.mode==='pan'||!!pinch)&&performance.now()-lastViewportElementSync<140)){
+ syncElementLayer(d.elements.filter(e=>{if(e.type!=='image'||state.selected.includes(e.id))return true;const b=bbox(e);return b.x<=vx+vw&&b.x+b.w>=vx&&b.y<=vy+vh&&b.y+b.h>=vy;}));
+ lastViewportElementSync=performance.now();
+}layerOv.innerHTML=`${snapGuideSVG()}${selectionSVG()}${anchorOverlaySVG()}${axisLockSVG()}${marqueeSVG()}`;$('#zoomValue').textContent=Math.round(d.zoom*100)+'%';$('#elementCount').textContent=d.elements.length+' ELEMENTS';}
 function axisLockSVG(){const a=state.axisLock,g=state.gesture;if(!a||(!(g&&['draw','arrow-edit'].includes(g.mode))&&!state.multiArrow))return '';const z=doc().zoom,dx=a.to.x-a.from.x,dy=a.to.y-a.from.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,ext=4000/z;
  const label=`${a.deg}°`,w=(label.length*7+14)/z,h=20/z,lx=a.to.x+14/z,ly=a.to.y-30/z;
  return `<g pointer-events="none"><path d="M${a.from.x-ux*ext} ${a.from.y-uy*ext}L${a.from.x+ux*ext} ${a.from.y+uy*ext}" stroke="#6965DB" stroke-width="${1/z}" stroke-dasharray="${5/z} ${4/z}" opacity=".7"/><rect x="${lx}" y="${ly}" width="${w}" height="${h}" rx="${10/z}" fill="#6965DB"/><text x="${lx+w/2}" y="${ly+h/2+4/z}" text-anchor="middle" font-family="Prompt, Arial, sans-serif" font-size="${11/z}" font-weight="600" fill="#fff">${label}</text></g>`;}
