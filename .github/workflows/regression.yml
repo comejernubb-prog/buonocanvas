@@ -1,0 +1,23 @@
+name: BUONOCANVAS regression tests
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned runtime packages
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Run complete regression suite (pass 1)
+        run: npm test
+      - name: Run complete regression suite (pass 2)
+        run: npm test
