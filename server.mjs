@@ -73,10 +73,34 @@ function sendStatic(req,res,asset,type,extra={}){
 const htmlAsset=prepareStatic('./index.html');
 const pdfAsset=prepareStatic('./pdf-vector.js');
 const v13Asset=prepareStatic('./v13-core.js');
+ // Same-origin, bundled Prompt font files: no Google Fonts/CDN dependency on Windows, macOS or iPad.
+ const promptWeights=[300,400,500,600,700,800],fontFileMap=new Map(),fontCssRules=[];
+ const promptRanges={latin:'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD',thai:'U+0E00-0E7F,U+200C-200D,U+25CC'};
+ for(const subset of ['latin','thai'])for(const weight of promptWeights){
+   const filename=`prompt-${subset}-${weight}-normal.woff2`;
+   const bytes=readFileSync(new URL(`./node_modules/@fontsource/prompt/files/${filename}`,import.meta.url));
+   if(bytes.toString('ascii',0,4)!=='wOF2')throw Error('Invalid bundled Prompt font: '+filename);
+   fontFileMap.set(filename,bytes);
+   fontCssRules.push(`@font-face{font-family:"Prompt";font-style:normal;font-weight:${weight};font-display:swap;src:url("/fonts/${filename}") format("woff2");unicode-range:${promptRanges[subset]};}`);
+ }
+ const promptCssBytes=Buffer.from(fontCssRules.join('\n'),'utf8');
+ const promptCssAsset={raw:promptCssBytes,etag:'"'+createHash('sha1').update(promptCssBytes).digest('base64url')+'"',br:brotliCompressSync(promptCssBytes),gz:gzipSync(promptCssBytes)};
+
 let backupInProgress=false;
 async function handle(req,res){
   const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`),path=url.pathname;
-  if(path==='/health'){json(res,200,{ok:true,version:14,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true,editablePNG:true,backup:true});return;}
+  if(path==='/health'){json(res,200,{ok:true,version:15,database:'sqlite',cloud:true,originalAssets:true,vectorPDF:true,editablePNG:true,backup:true,promptFont:true});return;}
+  if((req.method==='GET'||req.method==='HEAD')&&path==='/fonts/prompt.css'){
+    sendStatic(req,res,promptCssAsset,'text/css; charset=utf-8',{'Cache-Control':'public, max-age=3600'});return;
+  }
+  if((req.method==='GET'||req.method==='HEAD')&&path.startsWith('/fonts/')){
+    const name=path.slice('/fonts/'.length),bytes=fontFileMap.get(name);
+    if(!bytes){json(res,404,{error:'Not found'});return;}
+    const etag='"'+name+'-'+bytes.length+'"';
+    const headers={'Content-Type':'font/woff2','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'*','ETag':etag};
+    if(req.headers['if-none-match']===etag){res.writeHead(304,headers);res.end();return;}
+    res.writeHead(200,{...headers,'Content-Length':bytes.length});res.end(req.method==='HEAD'?undefined:bytes);return;
+  }
   if(path==='/v13-core.js'&&(req.method==='GET'||req.method==='HEAD')){
     sendStatic(req,res,v13Asset,'text/javascript; charset=utf-8');return;
   }
@@ -148,7 +172,13 @@ const GUID='258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const clients=new Set(),locks=new Map();
 const MAX_FRAME=16*1024*1024,MAX_MESSAGE=16*1024*1024;
 function frame(opcode,payload){const buf=Buffer.isBuffer(payload)?payload:Buffer.from(payload||'');const size=buf.length;const h=Buffer.alloc(size<126?2:size<65536?4:10);h[0]=0x80|opcode;if(size<126)h[1]=size;else if(size<65536){h[1]=126;h.writeUInt16BE(size,2);}else{h[1]=127;h.writeBigUInt64BE(BigInt(size),2);}return Buffer.concat([h,buf]);}
-function socketSend(c,data){if(!c.alive||c.socket.destroyed)return;const raw=JSON.stringify(data);if(c.socket.writableLength>24*1024*1024){c.socket.destroy();return;}c.socket.write(frame(1,raw));}
+function socketSend(c,data){
+ if(!c.alive||c.socket.destroyed)return;
+ // Presence cursors are lossy by design: do not allow them to congest a slow mobile connection.
+ if(data.type==='cursor'&&c.socket.writableLength>128*1024)return;
+ if(c.socket.writableLength>8*1024*1024){c.socket.destroy();return;}
+ c.socket.write(frame(1,JSON.stringify(data)));
+}
 function broadcast(data,except=null){for(const c of clients)if(c!==except)socketSend(c,data);}
 function closeClient(c){if(!c.alive)return;c.alive=false;clients.delete(c);const freed=new Map();for(const [key,v] of locks)if(v.actor===c.actor){locks.delete(key);const at=key.indexOf(':'),board=key.slice(0,at),list=freed.get(board)||[];list.push(key.slice(at+1));freed.set(board,list);}for(const [boardId,ids] of freed)broadcast({type:'unlock',boardId,ids,actor:c.actor});broadcast({type:'presence',users:[...clients].map(x=>({id:x.actor,name:x.name}))});}
 const idOK=x=>typeof x==='string'&&x.length>=1&&x.length<=100&&/^[a-zA-Z0-9_-]+$/.test(x);
