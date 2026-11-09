@@ -80,6 +80,7 @@ async function main(){
   const w1=await alice.wait('welcome');assert.ok(w1.actor);
   bob=await Peer.connect(cookie);bob.send({type:'intro',name:'iPad'});
   const w2=await bob.wait('welcome');assert.ok(w2.actor);assert.notEqual(w1.actor,w2.actor);
+  const diagnostics=await (await fetch(base+'/api/diagnostics',{headers:{Cookie:cookie}})).json();assert.ok(diagnostics.activeWebSockets>=2);assert.ok(diagnostics.webSocketsOpened>=2);
   alice.send({type:'ping',t:12345});assert.equal((await alice.wait('pong')).t,12345);
   const boardId='device_test_'+Date.now();
   alice.send({type:'boardCreate',reqId:'r1',board:{id:boardId,name:'Devices',background:'#ffffff',grid:false}});
