@@ -613,6 +613,7 @@ function cloudReceived(msg){
   cloudRefreshFromServer(msg.boards||[]);cloud.synced=true;cloud.retries=0;$('#cloudGate').classList.add('hidden');cloudBanner('');showCloudStatus('Connected · Cloud ready');
   clearInterval(cloud.heartbeat);cloud.resumeGraceUntil=Date.now()+20000;
   cloud.heartbeat=setInterval(()=>{if(!cloud.online||document.hidden)return;
+   if(cloud.inFlight&&Date.now()-(cloud.inFlight.sentAt||Date.now())>30000){cloud.socket?.close();return;}
    if(Date.now()>cloud.resumeGraceUntil&&Date.now()-cloud.lastPong>95000){cloud.socket?.close();return;}
    wsSend({type:'ping',t:Date.now()});
   },25000);return;
