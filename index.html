@@ -713,7 +713,7 @@ const TOOLS=[['selection','V'],['hand','H'],['|',''],['rectangle','R'],['diamond
 function buildToolbar(){ $('#toolbar').innerHTML=TOOLS.map(([tool,key])=>tool==='|'?'<div class="tool-sep"></div>':`<button id="tool-${tool}" class="tool ${tool==='hand'?'active':''}" data-tool="${tool}" title="${tool[0].toUpperCase()+tool.slice(1)} (${key})" aria-label="${tool}">${i(tool)}</button>`).join(''); }
 function setTool(t){if(state.multiArrow&&t!=='arrow'&&t!=='line')finishMultiArrow(true);if(t==='undo')return undo();if(t==='redo')return redo();if(t==='image'){ $('#imageInput').click();return;}state.tool=t;if(t!=='selection'&&t!=='hand')state.arrowEditId=null;state.anchorHover=null;state.activeAnchor=null;$$('.tool').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));$('#drawing').setAttribute('class','tool-'+t);scheduleRender();if(t==='hand')refreshSmartHover();}
 function switchDoc(id){if(!state.docs.some(d=>d.id===id))return;state.guides=[];state.arrowEditId=null;finishEditor();sessionHistories.set(state.currentId,{history:state.history,future:state.future});state.currentId=id;state.selected=[];let session=sessionHistories.get(id)||{history:[],future:[]};state.history=session.history;state.future=session.future;updateHistoryButtons();persist();renderAll();}
-function newBoard(){let d={id:genId(),name:'Untitled canvas',updatedAt:now(),elements:[],pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false};state.docs.unshift(d);switchDoc(d.id);setTool('selection');showToast('New canvas created');}
+function newBoard(){let d={id:genId(),name:'Untitled canvas',updatedAt:now(),elements:[],pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false};state.docs.unshift(d);switchDoc(d.id);setTool('hand');showToast('New canvas created');}
 function renderBoards(){const boardsHTML=state.docs.map(d=>`<button class="board-item ${d.id===state.currentId?'active':''}" data-board="${d.id}">${i('board')}<span class="board-info"><span class="board-name" style="display:block">${esc(d.name)}</span><span class="board-meta">${d.elements.length} elements</span></span><span class="board-menu" data-delete-board="${d.id}" title="Delete canvas">×</span></button>`).join('');if(boardsHTML!==lastBoardsHTML){lastBoardsHTML=boardsHTML;$('#boardList').innerHTML=boardsHTML;}if(document.activeElement!==$('#docName'))$('#docName').value=doc().name;}
 /* Group metadata is stored directly on each object, preserving the current JSON format.
  * Selecting a member always selects its full group; groups can be merged/reassigned. */
@@ -1585,7 +1585,7 @@ async function importImage(file,clientX=null,clientY=null){
   const st=$('#stage'),r=st.getBoundingClientRect(),sx=clientX==null?st.clientWidth/2:clientX-r.left,sy=clientY==null?st.clientHeight/2:clientY-r.top;
   const x=(sx-doc().pan.x)/doc().zoom,y=(sy-doc().pan.y)/doc().zoom,width=Math.min(520,w),height=width*h/w;
   checkpoint();const el=s('image',x-width/2,y-height/2,width,height,'transparent','transparent',{src:result.url,rough:0,originalWidth:w,originalHeight:h,originalMime:result.mime,originalBytes:result.bytes});
-  doc().elements.push(el);state.selected=[el.id];changed();setTool('selection');showToast('Original image saved unchanged · '+w+'×'+h+' px');
+  doc().elements.push(el);state.selected=[el.id];changed();setTool('hand');showToast('Original image saved unchanged · '+w+'×'+h+' px');
  }catch(err){console.error('Image upload failure',err);showToast('Image not added: '+(err.message||'Upload failed'));}
  finally{bmp?.close?.();}
 }
@@ -1604,7 +1604,7 @@ function pasteInternalShapes(elements=state.clipboard){
  const center={x:(stage.clientWidth/2-doc().pan.x)/doc().zoom,y:(stage.clientHeight/2-doc().pan.y)/doc().zoom};
  const cascade=(state.pasteSerial++%7)*18/doc().zoom,dx=center.x-(box.x+box.w/2)+cascade,dy=center.y-(box.y+box.h/2)+cascade;
  const copied=copyObjects(originals,dx,dy);
- doc().elements.push(...copied);state.selected=copied.map(e=>e.id);changed();setTool('selection');showToast(`${copied.length} object${copied.length===1?'':'s'} pasted at viewport center`);
+ doc().elements.push(...copied);state.selected=copied.map(e=>e.id);changed();setTool('hand');showToast(`${copied.length} object${copied.length===1?'':'s'} pasted at viewport center`);
 }
 function toggleInspector(force){let open=typeof force==='boolean'?force:!$('.workspace').classList.contains('inspector-open');$('.workspace').classList.toggle('inspector-open',open);$('#inspectorToggle').setAttribute('aria-expanded',String(open));}
 function bind(){buildToolbar();
