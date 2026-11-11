@@ -51,7 +51,7 @@ try{
  assert.equal(await evaluate("document.querySelector('#tool-hand').classList.contains('active')"),true,'Hand is the default tool');
  const stageRect=await evaluate('(()=>{const r=document.querySelector("#drawing").getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()');
  const blank={x:Math.round(stageRect.x+stageRect.w*.12),y:Math.round(stageRect.y+stageRect.h*.78)};
- const camera=async()=>{const raw=await evaluate('document.querySelector("#drawing > g")?.getAttribute("transform")');const values=raw.match(/-?[0-9]+(?:\\.[0-9]+)?/g).map(Number);return{x:values[0],y:values[1],z:values[2]};};
+ const camera=async()=>{const raw=await evaluate('document.querySelector("#drawing > g")?.getAttribute("transform")');const values=raw.match(/-?[0-9]+(?:\.[0-9]+)?/g).map(Number);return{x:values[0],y:values[1],z:values[2]};};
  const move=async(x,y,button='none',buttons=0)=>rpc('Input.dispatchMouseEvent',{type:'mouseMoved',x,y,button,buttons});
  const down=async(x,y,button='left',buttons=1)=>rpc('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button,buttons,clickCount:1});
  const up=async(x,y,button='left')=>rpc('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button,buttons:0,clickCount:1});
