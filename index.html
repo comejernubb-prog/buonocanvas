@@ -342,6 +342,8 @@ body{font-family:Prompt,Arial,Helvetica,sans-serif;color:var(--text);letter-spac
 .arrow-type-group{display:none;align-items:center;gap:4px}.stroke-bar.has-arrow .arrow-type-group{display:inline-flex}
 .stroke-step.arrow-type{display:inline-flex;align-items:center;justify-content:center}.stroke-step.arrow-type.active{background:#ecebff;border-color:#6965db66;color:#4a47b8}
 .stroke-sep{width:1px;height:18px;background:#e2e2e2;margin:0 2px}
+
+#drawing.tool-hand.auto-select-hover:not(.is-panning){cursor:default}
 </style>
 </head>
 <body>
@@ -371,7 +373,7 @@ body{font-family:Prompt,Arial,Helvetica,sans-serif;color:var(--text);letter-spac
     </aside>
     <section class="stage-wrap" id="stageWrap">
       <div class="stage" id="stage"><div id="remoteCursors" class="remote-cursors" aria-hidden="true"></div>
-        <svg id="drawing" class="tool-selection" xmlns="http://www.w3.org/2000/svg" aria-label="Drawing canvas"></svg>
+        <svg id="drawing" class="tool-hand" xmlns="http://www.w3.org/2000/svg" aria-label="Drawing canvas"></svg>
         <div class="status-floating" role="status"><span class="status-dot"></span><span id="saveLabel">Connecting…</span></div>
         <div class="canvas-label">INFINITE CANVAS · <span id="elementCount">0 ELEMENTS</span></div>
         <div class="zoom-panel"><button id="zoomOut" title="Zoom out">−</button><span id="zoomValue" class="zoom-text">100%</span><button id="zoomIn" title="Zoom in">+</button><button id="zoomFit" title="Fit to drawing" style="font-size:14px">⊡</button></div>
@@ -491,7 +493,7 @@ const seed=()=>{ const elements=[
 ];return {id:genId(),name:'Welcome to buonocanvas',updatedAt:now(),elements,pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false};};
 // Cloud-only state; old browser-only boards intentionally are not imported.
 let store={docs:[{id:'bootstrap',name:'Connecting to cloud…',updatedAt:now(),elements:[],pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false}],currentId:'bootstrap'};
-let state={...store,anchorHover:null,activeAnchor:null,arrowEditId:null,tool:'selection',selected:[],gesture:null,guides:[],space:false,clipboard:[],pasteSerial:0,history:[],future:[],defaultStyle:{stroke:COLOR.black,fill:'transparent',strokeWidth:2.5,opacity:100,dash:'solid',dashLength:9,dashGap:7,lineCap:'round',lineJoin:'round',startMarker:'none',endMarker:'arrow',rough:0,fontSize:24},drawing:false};
+let state={...store,anchorHover:null,activeAnchor:null,arrowEditId:null,tool:'hand',selected:[],gesture:null,guides:[],space:false,clipboard:[],pasteSerial:0,history:[],future:[],defaultStyle:{stroke:COLOR.black,fill:'transparent',strokeWidth:2.5,opacity:100,dash:'solid',dashLength:9,dashGap:7,lineCap:'round',lineJoin:'round',startMarker:'none',endMarker:'arrow',rough:0,fontSize:24},drawing:false};
 const doc=()=>state.docs.find(x=>x.id===state.currentId)||state.docs[0];
 let savedTimer=null,toastTimer=null,editor=null,raf=0,lastBoardsHTML='',lastInspectorHTML='',fontEpoch=0,viewportG=null,layerEls=null,layerOv=null;
 const SVGNS='http://www.w3.org/2000/svg',elCache=new Map();state.lastPointerType='mouse';
@@ -708,8 +710,8 @@ function undo(){if(!state.history.length)return;state.future.push(snapshot());if
 function redo(){if(!state.future.length)return;state.history.push(snapshot());if(state.history.length>HISTORY_LIMIT)state.history.shift();restoreSnapshot(state.future.pop());state.selected=state.selected.filter(id=>doc().elements.some(e=>e.id===id));changed();updateHistoryButtons();showToast('Redo');}
 function updateHistoryButtons(){let a=$('#tool-undo'),b=$('#tool-redo');if(a){a.style.opacity=state.history.length?1:.32;a.title=`Undo (Ctrl+Z) · ${state.history.length}/${HISTORY_LIMIT} steps`;a.disabled=!state.history.length;}if(b){b.style.opacity=state.future.length?1:.32;b.title=`Redo (Ctrl+Y) · ${state.future.length} steps`;b.disabled=!state.future.length;}}
 const TOOLS=[['selection','V'],['hand','H'],['|',''],['rectangle','R'],['diamond','D'],['ellipse','O'],['triangle','U'],['arrow','A'],['line','L'],['pencil','P'],['|',''],['text','T'],['note','N'],['image','I'],['eraser','E'],['|',''],['undo','Ctrl+Z'],['redo','Ctrl+Y']];
-function buildToolbar(){ $('#toolbar').innerHTML=TOOLS.map(([tool,key])=>tool==='|'?'<div class="tool-sep"></div>':`<button id="tool-${tool}" class="tool ${tool==='selection'?'active':''}" data-tool="${tool}" title="${tool[0].toUpperCase()+tool.slice(1)} (${key})" aria-label="${tool}">${i(tool)}</button>`).join(''); }
-function setTool(t){if(state.multiArrow&&t!=='arrow'&&t!=='line')finishMultiArrow(true);if(t==='undo')return undo();if(t==='redo')return redo();if(t==='image'){ $('#imageInput').click();return;}state.tool=t;if(t!=='selection')state.arrowEditId=null;state.anchorHover=null;state.activeAnchor=null;$$('.tool').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));$('#drawing').setAttribute('class','tool-'+t);scheduleRender();}
+function buildToolbar(){ $('#toolbar').innerHTML=TOOLS.map(([tool,key])=>tool==='|'?'<div class="tool-sep"></div>':`<button id="tool-${tool}" class="tool ${tool==='hand'?'active':''}" data-tool="${tool}" title="${tool[0].toUpperCase()+tool.slice(1)} (${key})" aria-label="${tool}">${i(tool)}</button>`).join(''); }
+function setTool(t){if(state.multiArrow&&t!=='arrow'&&t!=='line')finishMultiArrow(true);if(t==='undo')return undo();if(t==='redo')return redo();if(t==='image'){ $('#imageInput').click();return;}state.tool=t;if(t!=='selection'&&t!=='hand')state.arrowEditId=null;state.anchorHover=null;state.activeAnchor=null;$$('.tool').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));$('#drawing').setAttribute('class','tool-'+t);scheduleRender();if(t==='hand')refreshSmartHover();}
 function switchDoc(id){if(!state.docs.some(d=>d.id===id))return;state.guides=[];state.arrowEditId=null;finishEditor();sessionHistories.set(state.currentId,{history:state.history,future:state.future});state.currentId=id;state.selected=[];let session=sessionHistories.get(id)||{history:[],future:[]};state.history=session.history;state.future=session.future;updateHistoryButtons();persist();renderAll();}
 function newBoard(){let d={id:genId(),name:'Untitled canvas',updatedAt:now(),elements:[],pan:{x:0,y:0},zoom:1,background:'#FFFFFF',grid:false};state.docs.unshift(d);switchDoc(d.id);setTool('selection');showToast('New canvas created');}
 function renderBoards(){const boardsHTML=state.docs.map(d=>`<button class="board-item ${d.id===state.currentId?'active':''}" data-board="${d.id}">${i('board')}<span class="board-info"><span class="board-name" style="display:block">${esc(d.name)}</span><span class="board-meta">${d.elements.length} elements</span></span><span class="board-menu" data-delete-board="${d.id}" title="Delete canvas">×</span></button>`).join('');if(boardsHTML!==lastBoardsHTML){lastBoardsHTML=boardsHTML;$('#boardList').innerHTML=boardsHTML;}if(document.activeElement!==$('#docName'))$('#docName').value=doc().name;}
@@ -1178,6 +1180,47 @@ function hitTest(e){
  const nativeItem=native?doc().elements.find(el=>el.id===native):null;
  if(nativeItem&&!isConnector(nativeItem)&&nativeItem.type!=='text')return native;
  return textBoxHitAt(mouseAt(e))?.id||native;
+}
+
+function smartHoverTarget(e){
+ if(!Number.isFinite(e?.clientX)||!Number.isFinite(e?.clientY)||state.multiArrow)return null;
+ const p=mouseAt(e),z=Math.max(.1,doc().zoom),radius=8/z,elements=doc().elements;
+ const nativeId=e.target?.closest?.('[data-id]')?.getAttribute('data-id');
+ const native=nativeId?elements.find(x=>x.id===nativeId):null;
+ if(native&&!isConnector(native)&&native.type!=='text')return native;
+ const txt=textBoxHitAt(p);if(txt)return txt;
+ if(native?.type==='text')return native;
+ const closeConnector=el=>{
+  const b=bbox(el);
+  if(p.x<b.x-radius||p.y<b.y-radius||p.x>b.x+b.w+radius||p.y>b.y+b.h+radius)return false;
+  if(curveGeometry(el))return curveHitDistance(p,el)<=radius;
+  const pts=arrowPoints(el);return pts.slice(1).some((v,i)=>distanceToSegment(p,pts[i],v)<=radius);
+ };
+ if(native&&isConnector(native)&&closeConnector(native))return native;
+ if(e.target?.closest?.('[data-handle],[data-arrow-handle]')&&state.selected.length===1){
+  const selected=elements.find(el=>el.id===state.selected[0]);if(selected)return selected;
+ }
+ for(let i=elements.length-1;i>=0;i--){
+  const el=elements[i];if(el.id===nativeId)continue;
+  if(isConnector(el)){if(closeConnector(el))return el;continue;}
+  const b=bbox(el);
+  if(p.x>=b.x-radius&&p.x<=b.x+b.w+radius&&p.y>=b.y-radius&&p.y<=b.y+b.h+radius)return el;
+ }
+ return null;
+}
+let smartHoverFrame=0,lastSmartPointer=null;
+function refreshSmartHover(e){
+ if(e?.clientX!==undefined)lastSmartPointer={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType||'mouse'};
+ const svg=$('#drawing');if(!svg)return;
+ if(state.tool!=='hand'||state.space||state.gesture||pinch||lastSmartPointer?.pointerType==='touch'){svg.classList.remove('auto-select-hover');return;}
+ if(!lastSmartPointer||smartHoverFrame)return;
+ smartHoverFrame=requestAnimationFrame(()=>{
+  smartHoverFrame=0;
+  if(state.tool!=='hand'||state.space||state.gesture||pinch){svg.classList.remove('auto-select-hover');return;}
+  const p=lastSmartPointer,target=document.elementFromPoint(p.clientX,p.clientY);
+  if(!target||!svg.contains(target)){svg.classList.remove('auto-select-hover');return;}
+  svg.classList.toggle('auto-select-hover',!!smartHoverTarget({clientX:p.clientX,clientY:p.clientY,target}));
+ });
 }
 let lastTextTap=null,lastArrowTap=null,lastHandleTap=null;
 function canvasDownCore(e){if(e.button!==0&&e.button!==1&&!forcedTool)return;if(e.button===1)e.preventDefault();closeImageMenu();if(editor&&e.target!==editor)finishEditor();
