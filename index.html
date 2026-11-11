@@ -1195,7 +1195,7 @@ function textBoxHitAt(p){
 }
 function hitTest(e){
  const native=e.target.closest?.('[data-id]')?.getAttribute('data-id')||null;
- if(!['selection','hand'].includes(state.tool)&&forcedTool!=='selection'||state.multiArrow||!Number.isFinite(e.clientX)||!Number.isFinite(e.clientY))return native;
+ if(!['selection','hand'].includes(state.tool)||state.multiArrow||!Number.isFinite(e.clientX)||!Number.isFinite(e.clientY))return native;
  const nativeItem=native?doc().elements.find(el=>el.id===native):null;
  if(nativeItem&&!isConnector(nativeItem)&&nativeItem.type!=='text')return native;
  return textBoxHitAt(mouseAt(e))?.id||native;
