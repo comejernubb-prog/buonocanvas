@@ -948,15 +948,21 @@ function renderHint(){let el=$('#stageHint');if(!el){const wrap=$('.stage-wrap')
 // The canvas paints every animation frame, while expensive inspector/board/toolbar DOM rebuilding
 // is batched. This prevents style controls and the sidebar from being torn down 60x/second on iPad.
 let lastUiPaintAt=0,lastUiPaintKey='';
-function scheduleRender(){
- if(cloud.ready&&state.gesture&&['draw','move','clone-move','resize','arrow-edit','erase'].includes(state.gesture.mode))cloudSchedule(170);
+// A pure camera change does not need to rebuild/cull every canvas element or property panel.
+let fullFrameRequested=false;
+function scheduleRender(viewOnly=false){
+ if(!viewOnly)fullFrameRequested=true;
+ if(!viewOnly&&cloud.ready&&state.gesture&&['draw','move','clone-move','resize','arrow-edit','erase'].includes(state.gesture.mode))cloudSchedule(170);
  if(raf)return;
  raf=requestAnimationFrame(t=>{
-  raf=0;renderCanvas();
-  const key=state.currentId+'|'+state.tool+'|'+state.selected.join(',')+'|'+(editor?.id||'')+'|'+(state.multiArrow?.id||'');
-  if(key!==lastUiPaintKey||t-lastUiPaintAt>(state.gesture?250:120)){
-   lastUiPaintKey=key;lastUiPaintAt=t;
-   renderInspector();renderBoards();renderAlignBar();renderTextBar();renderStrokeBar();renderHint();
+  raf=0;const full=fullFrameRequested;fullFrameRequested=false;
+  if(full)renderCanvas();else renderViewportOnly();
+  if(full){
+   const key=state.currentId+'|'+state.tool+'|'+state.selected.join(',')+'|'+(editor?.id||'')+'|'+(state.multiArrow?.id||'');
+   if(key!==lastUiPaintKey||t-lastUiPaintAt>(state.gesture?250:120)){
+    lastUiPaintKey=key;lastUiPaintAt=t;
+    renderInspector();renderBoards();renderAlignBar();renderTextBar();renderStrokeBar();renderHint();
+   }
   }
   drawRemoteCursors();
  });
@@ -1041,6 +1047,19 @@ function renderCanvas(){let d=doc(),stage=$('#stage'),svg=$('#drawing'),w=stage.
  syncElementLayer(d.elements.filter(e=>{if(e.type!=='image'||state.selected.includes(e.id))return true;const b=bbox(e);return b.x<=vx+vw&&b.x+b.w>=vx&&b.y<=vy+vh&&b.y+b.h>=vy;}));
  lastViewportElementSync=performance.now();
 }layerOv.innerHTML=`${snapGuideSVG()}${selectionSVG()}${anchorOverlaySVG()}${axisLockSVG()}${marqueeSVG()}`;$('#zoomValue').textContent=Math.round(d.zoom*100)+'%';$('#elementCount').textContent=d.elements.length+' ELEMENTS';}
+function renderViewportOnly(){
+ const d=doc(),stage=$('#stage'),svg=$('#drawing');ensureLayers(svg);
+ const w=stage.clientWidth,h=stage.clientHeight;
+ svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+ viewportG.setAttribute('transform',`translate(${d.pan.x} ${d.pan.y}) scale(${d.zoom})`);
+ if(d.grid){
+  const size=Math.max(5,24*d.zoom);
+  stage.style.backgroundSize=size+'px '+size+'px';
+  stage.style.backgroundPosition=`${d.pan.x}px ${d.pan.y}px`;
+ }
+ layerOv.innerHTML=`${snapGuideSVG()}${selectionSVG()}${anchorOverlaySVG()}${axisLockSVG()}${marqueeSVG()}`;
+ $('#zoomValue').textContent=Math.round(d.zoom*100)+'%';
+}
 function axisLockSVG(){const a=state.axisLock,g=state.gesture;if(!a||(!(g&&['draw','arrow-edit'].includes(g.mode))&&!state.multiArrow))return '';const z=doc().zoom,dx=a.to.x-a.from.x,dy=a.to.y-a.from.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,ext=4000/z;
  const label=`${a.deg}°`,w=(label.length*7+14)/z,h=20/z,lx=a.to.x+14/z,ly=a.to.y-30/z;
  return `<g pointer-events="none"><path d="M${a.from.x-ux*ext} ${a.from.y-uy*ext}L${a.from.x+ux*ext} ${a.from.y+uy*ext}" stroke="#6965DB" stroke-width="${1/z}" stroke-dasharray="${5/z} ${4/z}" opacity=".7"/><rect x="${lx}" y="${ly}" width="${w}" height="${h}" rx="${10/z}" fill="#6965DB"/><text x="${lx+w/2}" y="${ly+h/2+4/z}" text-anchor="middle" font-family="Prompt, Arial, sans-serif" font-size="${11/z}" font-weight="600" fill="#fff">${label}</text></g>`;}
@@ -1407,13 +1426,32 @@ function wheelDevice(e){
 }
 // Pinch (ctrl+wheel / Safari gesture) zooms, two-finger trackpad scroll pans, a mouse wheel zooms.
 // The device is decided at the start of each burst so a fast scroll can't flip between pan and zoom.
+// Collect all wheel deltas from a frame, update camera once and keep zoom anchored to the cursor.
+let wheelQueue=[],wheelFrame=0;
 function wheelView(e,svg){
  lastWheelAt=performance.now();
- const rect=svg.getBoundingClientRect(),cx=e.clientX-rect.left,cy=e.clientY-rect.top,unit=e.deltaMode===1?16:e.deltaMode===2?rect.height:1,kind=wheelDevice(e);
+ const rect=svg.getBoundingClientRect(),cx=e.clientX-rect.left,cy=e.clientY-rect.top;
+ const unit=e.deltaMode===1?16:e.deltaMode===2?rect.height:1,kind=wheelDevice(e);
  const dx=e.deltaX*unit,dy=e.deltaY*unit;
- if(e.ctrlKey||e.metaKey){zoomTo(doc().zoom*Math.exp(-clamp(dy,-80,80)*(kind==='mouse'?.0022:.012)),cx,cy);return;}
- if(kind==='mouse'){if(e.shiftKey)panBy(-dy,0);else zoomTo(doc().zoom*Math.exp(-clamp(dy,-160,160)*.0018),cx,cy);return;}
- panBy(-(e.shiftKey&&!dx?dy:dx),-(e.shiftKey&&!dx?0:dy));
+ if(!Number.isFinite(dx)||!Number.isFinite(dy)||(!dx&&!dy))return;
+ if(e.ctrlKey||e.metaKey){
+  wheelQueue.push({mode:'zoom',scale:Math.exp(-clamp(dy,-80,80)*(kind==='mouse'?.0022:.007)),cx,cy});
+ }else if(kind==='mouse'&&!e.shiftKey){
+  wheelQueue.push({mode:'zoom',scale:Math.exp(-clamp(dy,-160,160)*.0018),cx,cy});
+ }else{
+  wheelQueue.push({mode:'pan',dx:-(e.shiftKey&&!dx?dy:dx),dy:-(e.shiftKey&&!dx?0:dy)});
+ }
+ if(wheelFrame)return;
+ wheelFrame=requestAnimationFrame(()=>{
+  wheelFrame=0;const queue=wheelQueue;wheelQueue=[];const d=doc();
+  for(const op of queue){
+   if(op.mode==='pan'){d.pan.x+=op.dx;d.pan.y+=op.dy;continue;}
+   const next=clamp(d.zoom*op.scale,.1,8);if(Math.abs(next-d.zoom)<1e-8)continue;
+   const wx=(op.cx-d.pan.x)/d.zoom,wy=(op.cy-d.pan.y)/d.zoom;
+   d.pan.x=op.cx-wx*next;d.pan.y=op.cy-wy*next;d.zoom=next;
+  }
+  viewChanged();
+ });
 }
 function installViewInput(svg){
  svg.addEventListener('wheel',e=>{e.preventDefault();wheelView(e,svg);},{passive:false});
@@ -1424,7 +1462,8 @@ function installViewInput(svg){
  document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
 }
 function lockAngle(from,to){const ang=Math.atan2(to.y-from.y,to.x-from.x),step=Math.PI/4,snapA=Math.round(ang/step)*step,len=Math.hypot(to.x-from.x,to.y-from.y),pt={x:from.x+Math.cos(snapA)*len,y:from.y+Math.sin(snapA)*len};let deg=Math.abs(Math.round(snapA*180/Math.PI))%180;if(deg>90)deg=180-deg;state.axisLock={from,to:pt,deg};return pt;}
-function viewChanged(){scheduleRender();}
+let viewIdleTimer=null;
+function viewChanged(){scheduleRender(true);clearTimeout(viewIdleTimer);viewIdleTimer=setTimeout(()=>{scheduleRender();refreshSmartHover();},170);}
 function zoomTo(zoom,cx,cy){let d=doc(),z=Math.max(.1,Math.min(8,zoom)),wx=(cx-d.pan.x)/d.zoom,wy=(cy-d.pan.y)/d.zoom;d.pan={x:cx-wx*z,y:cy-wy*z};d.zoom=z;viewChanged();}
 function panBy(dx,dy){const d=doc();d.pan={x:d.pan.x+dx,y:d.pan.y+dy};viewChanged();}
 function fitDrawing(){let els=doc().elements,stage=$('#stage'),W=stage.clientWidth,H=stage.clientHeight;if(!els.length){doc().pan={x:W/2-160,y:H/2-90};doc().zoom=1;viewChanged();return;}let bxs=els.map(bbox),minx=Math.min(...bxs.map(b=>b.x))-65,miny=Math.min(...bxs.map(b=>b.y))-65,maxx=Math.max(...bxs.map(b=>b.x+b.w))+65,maxy=Math.max(...bxs.map(b=>b.y+b.h))+65,z=Math.min(1.3,Math.max(.2,Math.min(W/(maxx-minx),H/(maxy-miny))));doc().zoom=z;doc().pan={x:(W-(maxx-minx)*z)/2-minx*z,y:(H-(maxy-miny)*z)/2-miny*z};viewChanged();}
