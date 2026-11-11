@@ -152,3 +152,17 @@ When an Arrow/Line runs across or close to a free Text Box, clicking inside the 
 **Operational limits**
 - Network interruptions cannot be eliminated. Pending edits are retained in the **current open browser tab** and replayed after reconnect; do not close the tab while offline.
 - Tests in the deployment environment do not replace physical device checks on every version of Windows, macOS and iPadOS.
+
+## v16 — Smart Hand navigation and fluid viewport
+
+- Hand is the **default active tool**. Left-dragging empty canvas begins panning immediately.
+- On mouse / pen hover near an object (within about 8 screen px), cursor switches to selection and left-dragging moves/selects that object. Clicking uncovered canvas keeps the grab cursor and pans; explicit Selection (V) is still available for marquee selection.
+- Text selection takes precedence over overlapping arrow hit areas, including while Hand is active.
+- **Middle-button pan starts at the first pixel** even immediately after rotating the scroll wheel. No four-pixel dead zone and no 300-ms wheel lockout.
+- Wheel input is coalesced per animation frame; cursor-centered zoom preserves the world-coordinate point beneath the mouse.
+- View-only pan/zoom updates the **SVG camera transform** without rerendering or culling every image and shape every frame. A complete scene recull happens after a brief idle interval.
+- On iPad, a finger drags the canvas, a quick tap selects an object, two-finger pinch zooms, while Apple Pencil remains a precision pointer. Explicit drawing tools remain distinct.
+- Panning does not trigger an unnecessary full database diff.
+- No changes to saved drawings, authentication, WebSocket protocol, SQLite schema, original image bytes, or Railway persistent storage.
+
+**Tests:** Node regression tests cover hover proximity, cursor defaults, text-first selection, camera-only render and removed middle-button freeze. Headless Chromium drives actual left-/middle-button drags, wheel zoom center anchoring, and object selection before deployment.

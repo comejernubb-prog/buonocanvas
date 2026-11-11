@@ -46,5 +46,46 @@ try{
  assert.equal(metadata.type,'buonocanvas-editable-png');
  assert.equal(metadata.document.elements.length,1);
  assert.ok(Math.abs(metadata.document.elements[0].crop.x-.1)<.001);
- console.log('Headless Chrome passed: login, WebSocket, original PNG upload, non-destructive crop, editable PNG download/roundtrip.');
+
+ // Test real Chromium input: Smart Hand defaults to pan and auto-selects when hovering objects.
+ assert.equal(await evaluate("document.querySelector('#tool-hand').classList.contains('active')"),true,'Hand is the default tool');
+ const stageRect=await evaluate('(()=>{const r=document.querySelector("#drawing").getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()');
+ const blank={x:Math.round(stageRect.x+stageRect.w*.12),y:Math.round(stageRect.y+stageRect.h*.78)};
+ const camera=async()=>{const raw=await evaluate('document.querySelector("#drawing > g")?.getAttribute("transform")');const values=raw.match(/-?[0-9]+(?:\.[0-9]+)?/g).map(Number);return{x:values[0],y:values[1],z:values[2]};};
+ const move=async(x,y,button='none',buttons=0)=>rpc('Input.dispatchMouseEvent',{type:'mouseMoved',x,y,button,buttons});
+ const down=async(x,y,button='left',buttons=1)=>rpc('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button,buttons,clickCount:1});
+ const up=async(x,y,button='left')=>rpc('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button,buttons:0,clickCount:1});
+ await move(blank.x,blank.y);await pause(50);
+ assert.equal(await evaluate("document.querySelector('#drawing').classList.contains('auto-select-hover')"),false);
+ const first=await camera();
+ await down(blank.x,blank.y);await move(blank.x+64,blank.y+31,'left',1);await up(blank.x+64,blank.y+31);await pause(140);console.log('Navigation checkpoint: left drag completed');
+ const afterLeftPan=await camera();
+ assert.ok(Math.abs(afterLeftPan.x-first.x-64)<4,'dragging blank canvas pans smoothly from first pixel');
+ assert.ok(Math.abs(afterLeftPan.y-first.y-31)<4,'blank canvas vertical pan follows pointer');
+ const mp={x:blank.x+64,y:blank.y+31};
+ await down(mp.x,mp.y,'middle',4);await move(mp.x-46,mp.y-24,'middle',4);await up(mp.x-46,mp.y-24,'middle');await pause(140);console.log('Navigation checkpoint: middle drag completed');
+ const afterMiddle=await camera();
+ assert.ok(Math.abs(afterMiddle.x-afterLeftPan.x+46)<4,'middle drag immediately pans horizontally');
+ assert.ok(Math.abs(afterMiddle.y-afterLeftPan.y+24)<4,'middle drag immediately pans vertically');
+ const wheel={x:mp.x-46,y:mp.y-24};const beforeZoom=await camera();
+ await rpc('Input.dispatchMouseEvent',{type:'mouseWheel',x:wheel.x,y:wheel.y,deltaX:0,deltaY:-120});
+ await pause(140);const afterZoom=await camera();console.log('Navigation checkpoint: zoom',JSON.stringify({before:beforeZoom,after:afterZoom}));
+ assert.ok(afterZoom.z>beforeZoom.z,'mouse wheel zooms canvas');
+ const wx=wheel.x-stageRect.x,wy=wheel.y-stageRect.y;
+ const anchorBefore={x:(wx-beforeZoom.x)/beforeZoom.z,y:(wy-beforeZoom.y)/beforeZoom.z};
+ const anchorAfter={x:(wx-afterZoom.x)/afterZoom.z,y:(wy-afterZoom.y)/afterZoom.z};
+ assert.ok(Math.hypot(anchorBefore.x-anchorAfter.x,anchorBefore.y-anchorAfter.y)<1.5,'zoom remains anchored below the mouse pointer');
+ await rpc('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+ await rpc('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+ await pause(40);
+ const imageRect=await evaluate('(()=>{const e=document.querySelector("#drawing [data-id]");if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}})()');
+ assert.ok(imageRect&&imageRect.w>5&&imageRect.h>5,'imported image is visible');
+ const object={x:Math.round(imageRect.x+imageRect.w/2),y:Math.round(imageRect.y+imageRect.h/2)};
+ await move(object.x,object.y);await pause(160);console.log('Navigation checkpoint: image hovered',JSON.stringify({object,svgClass:await evaluate("document.querySelector('#drawing').className.baseVal")}));
+ assert.equal(await evaluate("document.querySelector('#drawing').classList.contains('auto-select-hover')"),true,'hovering an object activates smart selection');
+ await down(object.x,object.y);await up(object.x,object.y);await pause(160);
+ const title=await evaluate("document.querySelector('#inspectorTitle')?.textContent||''");
+ assert.match(title,/Image/i,'clicking an object in Smart Hand selects it');
+
+ console.log('Headless Chrome passed: Smart Hand, left/middle drag, pointer-anchored zoom, image auto-selection, auth, Cloud Sync, PNG export.');
 } finally {try{ws?.close();}catch{}app.kill('SIGTERM');chrome.kill('SIGTERM');await pause(200);rmSync(dir,{recursive:true,force:true});}
