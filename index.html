@@ -342,6 +342,8 @@ body{font-family:Prompt,Arial,Helvetica,sans-serif;color:var(--text);letter-spac
 .arrow-type-group{display:none;align-items:center;gap:4px}.stroke-bar.has-arrow .arrow-type-group{display:inline-flex}
 .stroke-step.arrow-type{display:inline-flex;align-items:center;justify-content:center}.stroke-step.arrow-type.active{background:#ecebff;border-color:#6965db66;color:#4a47b8}
 .stroke-sep{width:1px;height:18px;background:#e2e2e2;margin:0 2px}
+.stage-hint{display:none!important}
+.plain-text-editor,.plain-text-editor:focus-visible{border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important}
 </style>
 </head>
 <body>
@@ -374,7 +376,7 @@ body{font-family:Prompt,Arial,Helvetica,sans-serif;color:var(--text);letter-spac
         <svg id="drawing" class="tool-selection" xmlns="http://www.w3.org/2000/svg" aria-label="Drawing canvas"></svg>
         <div class="status-floating" role="status"><span class="status-dot"></span><span id="saveLabel">Connecting…</span></div>
         <div class="canvas-label">INFINITE CANVAS · <span id="elementCount">0 ELEMENTS</span></div>
-        <div class="zoom-panel"><button id="zoomOut" title="Zoom out">−</button><span id="zoomValue" class="zoom-text">100%</span><button id="zoomIn" title="Zoom in">+</button><button id="zoomFit" title="Fit to drawing" style="font-size:14px">⊡</button></div>
+        <div class="zoom-panel"><button id="zoomOut" title="Zoom out">−</button><span id="zoomValue" class="zoom-text">100%</span><button id="zoomIn" title="Zoom in">+</button><button id="zoomFit" title="Fit all content" aria-label="Fit all content" style="font-size:17px">⛶</button></div>
       </div>
       <div class="stroke-bar" id="strokeBar" role="toolbar" aria-label="Line and shape stroke thickness">
         <span class="arrow-type-group" id="arrowTypeGroup"><button type="button" class="stroke-step arrow-type" data-arrow-type="sharp" title="Sharp arrow" aria-label="Sharp arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 11 8l9 11"/></svg></button><button type="button" class="stroke-step arrow-type" data-arrow-type="round" title="Curved arrow" aria-label="Curved arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 19c3-14 13-14 16 0"/></svg></button><button type="button" class="stroke-step arrow-type" data-arrow-type="elbow" title="Elbow arrow" aria-label="Elbow arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V8h16v11"/></svg></button><span class="stroke-sep"></span></span>
@@ -764,7 +766,7 @@ function outlineIntersections(o,a,b){const out=[],dx=b.x-a.x,dy=b.y-a.y;
 function insideOutline(o,p){if(o.kind==='ellipse')return((p.x-o.cx)/Math.max(1e-6,o.rx))**2+((p.y-o.cy)/Math.max(1e-6,o.ry))**2<=1;let inside=false;const q=o.pts;for(let k=0,m=q.length-1;k<q.length;m=k++){const a=q[k],b=q[m];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
 function outlineDistance(o,p){if(o.kind==='ellipse'){const r=Math.hypot((p.x-o.cx)/Math.max(1e-6,o.rx),(p.y-o.cy)/Math.max(1e-6,o.ry));return Math.abs(r-1)*Math.min(o.rx,o.ry);}let best=Infinity;const q=o.pts;for(let k=0;k<q.length;k++)best=Math.min(best,distanceToSegment(p,q[k],q[(k+1)%q.length]));return best;}
 function outlinePath(o){if(o.kind==='ellipse')return `M ${o.cx+o.rx} ${o.cy} A ${o.rx} ${o.ry} 0 1 1 ${o.cx-o.rx} ${o.cy} A ${o.rx} ${o.ry} 0 1 1 ${o.cx+o.rx} ${o.cy}Z`;return 'M'+o.pts.map(q=>`${q.x} ${q.y}`).join('L')+'Z';}
-const bindGapFor=t=>BIND_GAP+(Number(t.strokeWidth)||0)/2;
+const bindGapFor=()=>0;
 function bindReach(){return clamp(16/doc().zoom,6,30);}
 // The shape an arrow end would bind to: anything whose outline is within reach wins over a shape that merely
 // contains the point; ties go to the topmost.
@@ -774,7 +776,7 @@ function bindHit(p,exclude=[]){const ex=new Set(exclude),reach=bindReach();let i
  return inner;}
 const bindingAllowed=e=>!(e.altKey||e.ctrlKey||e.metaKey);
 // Hovering deep inside a shape for 700 ms switches the end to "inside" (precise) mode, like Excalidraw.
-function bindModeFor(hit){const t=performance.now(),d=state.bindDwell;if(!hit||!hit.deep){state.bindDwell=null;return'orbit';}if(!d||d.id!==hit.el.id){state.bindDwell={id:hit.el.id,since:t};scheduleDwellCheck();return'orbit';}return t-d.since>=BIND_DWELL?'inside':'orbit';}
+function bindModeFor(hit){return hit?.deep?'inside':'orbit';}
 let dwellTimer=0,lastConnectorMove=null;function scheduleDwellCheck(){clearTimeout(dwellTimer);dwellTimer=setTimeout(()=>{if(lastConnectorMove&&(state.gesture||state.multiArrow))canvasMoveCore(lastConnectorMove);},BIND_DWELL+20);}
 // --- geometry ---
 function boundEnd(info,other){if(info.mode==='inside')return{...info.focus};const hits=outlineIntersections(shapeOutline(info.target,bindGapFor(info.target)),info.focus,other);if(!hits.length)return{...info.focus};hits.sort((a,b)=>dist2(a,other)-dist2(b,other));return hits[0];}
@@ -970,6 +972,7 @@ function setStrokeThickness(value){
  const n=Number(value);if(!Number.isFinite(n))return;
  const size=Math.round(Math.max(.5,Math.min(48,n))*2)/2;
  const items=activeStrokeItems();
+ if(!items.length||items.some(isConnector))state.defaultStyle.strokeWidth=size;
  if(items.length){if(items.every(e=>Math.abs((e.strokeWidth||2.5)-size)<.01))return;checkpoint();for(const el of items)el.strokeWidth=size;changed();}
  else{state.defaultStyle.strokeWidth=size;scheduleRender();}
 }
@@ -1046,7 +1049,7 @@ function marqueeSVG(){let g=state.gesture;if(!g||g.mode!=='marquee')return '';le
 function renderAll(){renderCanvas();renderInspector();renderBoards();renderAlignBar();renderTextBar();renderStrokeBar();updateHistoryButtons();}
 function worldPoint(evt){const r=$('#drawing').getBoundingClientRect(),d=doc();return {x:(evt.clientX-r.left-d.pan.x)/d.zoom,y:(evt.clientY-r.top-d.pan.y)/d.zoom};}
 function screenPoint(x,y){const d=doc();return{x:d.pan.x+x*d.zoom,y:d.pan.y+y*d.zoom};}
-function updateStyles(style,value){let items=doc().elements.filter(e=>state.selected.includes(e.id));if(style==='fill'&&items.length&&items.every(e=>e.type==='note'))state.noteColor=value;if(items.length){checkpoint();items.forEach(e=>{if(style==='fontSize'&&e.type==='text'&&e.textBoxVersion!==2){let b=textMeasure(e);e.textBoxVersion=2;e.textWidth=b.w;delete e.textScaleX;delete e.textScaleY;}e[style]=value;if(style==='fontSize'&&e.type==='text'){const b=textMeasure(e);e.w=b.w;e.h=b.h;}});changed();}else{state.defaultStyle[style]=value;scheduleRender();}}
+function updateStyles(style,value){let items=doc().elements.filter(e=>state.selected.includes(e.id));if(style==='stroke'&&items.some(isConnector))state.defaultStyle.stroke=value;if(style==='fill'&&items.length&&items.every(e=>e.type==='note'))state.noteColor=value;if(items.length){checkpoint();items.forEach(e=>{if(style==='fontSize'&&e.type==='text'&&e.textBoxVersion!==2){let b=textMeasure(e);e.textBoxVersion=2;e.textWidth=b.w;delete e.textScaleX;delete e.textScaleY;}e[style]=value;if(style==='fontSize'&&e.type==='text'){const b=textMeasure(e);e.w=b.w;e.h=b.h;}});changed();}else{state.defaultStyle[style]=value;scheduleRender();}}
 function colorButtons(target,active){return `<div class="swatch-row">${PALETTE.map(color=>`<button class="swatch ${color==='transparent'?'transparent':''} ${active===color?'active':''}" style="${color==='transparent'?'':`background:${color}`}" data-style="${target}" data-value="${color}" title="${color}" aria-label="${color}"></button>`).join('')}<label class="swatch custom" title="Pick a custom color">+<input type="color" data-color-target="${target}" value="${active==='transparent'?'#ffffff':active||COLOR.brown}"/></label></div>`;}
 function optionButtons(property,options,selected){return `<div class="option-row">${options.map(([label,val])=>`<button class="option ${selected===val?'active':''}" data-style="${property}" data-value="${val}">${label}</button>`).join('')}</div>`;}
 function renderInspector(){let items=doc().elements.filter(e=>state.selected.includes(e.id)),obj=items[0]||state.defaultStyle,isCanvas=!items.length;$('#inspectorTitle').textContent=isCanvas?'Style & canvas':items.length===1?`${items[0].type[0].toUpperCase()+items[0].type.slice(1)} properties`:`${items.length} elements`;
@@ -1389,14 +1392,14 @@ function lockAngle(from,to){const ang=Math.atan2(to.y-from.y,to.x-from.x),step=M
 function viewChanged(){scheduleRender();}
 function zoomTo(zoom,cx,cy){let d=doc(),z=Math.max(.1,Math.min(8,zoom)),wx=(cx-d.pan.x)/d.zoom,wy=(cy-d.pan.y)/d.zoom;d.pan={x:cx-wx*z,y:cy-wy*z};d.zoom=z;viewChanged();}
 function panBy(dx,dy){const d=doc();d.pan={x:d.pan.x+dx,y:d.pan.y+dy};viewChanged();}
-function fitDrawing(){let els=doc().elements,stage=$('#stage'),W=stage.clientWidth,H=stage.clientHeight;if(!els.length){doc().pan={x:W/2-160,y:H/2-90};doc().zoom=1;viewChanged();return;}let bxs=els.map(bbox),minx=Math.min(...bxs.map(b=>b.x))-65,miny=Math.min(...bxs.map(b=>b.y))-65,maxx=Math.max(...bxs.map(b=>b.x+b.w))+65,maxy=Math.max(...bxs.map(b=>b.y+b.h))+65,z=Math.min(1.3,Math.max(.2,Math.min(W/(maxx-minx),H/(maxy-miny))));doc().zoom=z;doc().pan={x:(W-(maxx-minx)*z)/2-minx*z,y:(H-(maxy-miny)*z)/2-miny*z};viewChanged();}
+function fitDrawing(){let els=doc().elements,stage=$('#stage'),W=stage.clientWidth,H=stage.clientHeight;if(!els.length){doc().pan={x:W/2-160,y:H/2-90};doc().zoom=1;viewChanged();return;}let bxs=els.map(bbox),minx=Math.min(...bxs.map(b=>b.x))-65,miny=Math.min(...bxs.map(b=>b.y))-65,maxx=Math.max(...bxs.map(b=>b.x+b.w))+65,maxy=Math.max(...bxs.map(b=>b.y+b.h))+65,z=Math.min(1.3,Math.max(.1,Math.min(W/(maxx-minx),H/(maxy-miny))));doc().zoom=z;doc().pan={x:(W-(maxx-minx)*z)/2-minx*z,y:(H-(maxy-miny)*z)/2-miny*z};viewChanged();}
 function createTextAt(p){checkpoint();const n=s('text',p.x,p.y-((state.defaultStyle.fontSize||24)*.68+4),24,45,state.defaultStyle.stroke,'transparent',{fontSize:state.defaultStyle.fontSize,textBoxVersion:2,fontWeight:500,autoResize:true,textAlign:state.textAlign||'left'});doc().elements.push(n);state.selected=[n.id];changed();startEditor(n,true);}
 function startEditor(e,isNew=false){
  finishEditor();cloudLock([e.id]);
  const text=e.type==='text',label=e.type==='note'||LABEL_TYPES.has(e.type),z=doc().zoom,auto=text&&e.autoResize;
- const el=document.createElement('textarea');el.className='text-editor';el.spellcheck=false;
+ const el=document.createElement('textarea');el.className=text?'text-editor plain-text-editor':'text-editor';el.spellcheck=false;
  el.style.color=e.stroke&&e.stroke!=='transparent'?e.stroke:'#1E1E1E';el.style.lineHeight='1.36';
- el.value=isNew&&text?'':e.text||'';el.placeholder=text?'Type text…':label&&e.type!=='note'?'Label…':'';
+ el.value=isNew&&text?'':e.text||'';el.placeholder=text?'':label&&e.type!=='note'?'Label…':'';
  $('#stage').appendChild(el);
  let initialWidth=0;
  const place=()=>{if(!editor||editor.node!==el)return;
