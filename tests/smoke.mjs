@@ -20,6 +20,7 @@ async function main(){try{
  const fontCssRes=await fetch(base+'/fonts/prompt.css');assert.equal(fontCssRes.status,200);assert.match(fontCssRes.headers.get('content-type')||'',/text\/css/);const fontCss=await fontCssRes.text();assert.match(fontCss,/font-family:"Prompt"/);assert.match(fontCss,/prompt-thai-400-normal\.woff2/);
  for(const subset of ['thai','latin']){const fontRes=await fetch(base+'/fonts/prompt-'+subset+'-400-normal.woff2');assert.equal(fontRes.status,200);assert.match(fontRes.headers.get('content-type')||'',/font\/woff2/);const fontBuffer=Buffer.from(await fontRes.arrayBuffer());assert.equal(fontBuffer.toString('ascii',0,4),'wOF2');assert.ok(fontBuffer.length>2000);}
  assert.equal((await fetch(base+'/fonts/forbidden.woff2')).status,404);
+ const fit=await fetch(base+'/daily-fit');assert.equal(fit.status,200);assert.ok((await fit.text()).includes('<title>Daily Fit</title>'));
  const publicScript=await fetch(base+'/v13-core.js');assert.equal(publicScript.status,200);assert.ok((await publicScript.text()).includes('embedEditablePng'));
  assert.equal((await fetch(base+'/api/backup')).status,401);
  assert.equal((await fetch(base+'/api/diagnostics')).status,401);

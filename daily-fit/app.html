@@ -1,0 +1,611 @@
+<title>Daily Fit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Prompt:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone-width column; every screen is a stack of big tap targets, numbers set in a condensed scoreboard face.
+   Equipment types borrow bumper-plate colours: blue free weight, amber machine, green cable, red bodyweight. */
+:root{
+  --bg:#EDF0F4;--surface:#FFFFFF;--sunk:#E2E7ED;--ink:#131A22;--muted:#5A6675;--line:#D3DAE2;
+  --accent:#1F5AE0;--accent-ink:#FFFFFF;--accent-soft:#E3EBFD;
+  --fw:#1F5AE0;--mc:#A86A00;--cb:#1B8048;--bw:#C23B3B;
+  --up:#1B8048;--down:#C23B3B;--icm:#B3BCC8;
+  --f-ui:"Prompt","Noto Sans Thai","Leelawadee UI",system-ui,sans-serif;
+  --f-num:"Barlow Condensed","Prompt","Arial Narrow",sans-serif;
+  --r:18px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1318;--surface:#1A2029;--sunk:#141920;--ink:#EEF2F6;--muted:#97A3B1;--line:#2D3642;
+  --accent:#6C9BFF;--accent-ink:#0A1124;--accent-soft:#1D2A47;
+  --fw:#6C9BFF;--mc:#F0B03C;--cb:#4CC882;--bw:#FF7B72;
+  --up:#4CC882;--down:#FF7B72;--icm:#4B5766;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1318;--surface:#1A2029;--sunk:#141920;--ink:#EEF2F6;--muted:#97A3B1;--line:#2D3642;
+  --accent:#6C9BFF;--accent-ink:#0A1124;--accent-soft:#1D2A47;
+  --fw:#6C9BFF;--mc:#F0B03C;--cb:#4CC882;--bw:#FF7B72;
+  --up:#4CC882;--down:#FF7B72;--icm:#4B5766;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.45;
+  padding-block:14px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-tap-highlight-color:transparent}
+#app{max-width:540px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;text-align:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:700;letter-spacing:.01em}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* header */
+.top{display:flex;align-items:center;gap:12px;min-height:52px}
+.top h1{font-size:24px;font-weight:600;line-height:1.15;min-width:0;flex:1}
+.top h1 small{display:block;font-size:13px;font-weight:400;color:var(--muted)}
+.brand{font-family:var(--f-num);font-size:34px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.brand i{font-style:normal;color:var(--accent)}
+.back{width:52px;height:52px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;flex:none}
+.back svg{width:24px;height:24px}
+.ghost{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:14px;font-weight:500}
+
+/* icons */
+.ic{display:block;width:100%;height:100%;color:var(--ink)}
+.ic path{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ic .b{stroke:currentColor}.ic .hd{fill:currentColor}
+.ic .a{stroke:var(--eq,var(--accent))}.ic .m{stroke:var(--icm)}
+.eq-fw{--eq:var(--fw)}.eq-mc{--eq:var(--mc)}.eq-cb{--eq:var(--cb)}.eq-bw{--eq:var(--bw)}
+
+/* week strip */
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{min-height:62px;border-radius:14px;background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--muted)}
+.day b{font-family:var(--f-num);font-size:20px;line-height:1;color:var(--ink)}
+.day[disabled]{opacity:.4;cursor:default}
+.day.sel{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.day.sel b{color:var(--accent-ink)}
+.dots{display:flex;gap:3px;height:6px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--fw)}
+.dots i.c{background:var(--cb)}
+.day.sel .dots i{background:var(--accent-ink)}
+.datebar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.datebar input{min-height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);padding:0 12px;font-size:14px}
+
+/* tiles */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
+.tile:active{transform:scale(.98)}
+.tile .pic{width:64px;height:64px}
+.tile strong{font-size:22px;font-weight:600;line-height:1.2}
+.tile .en{font-family:var(--f-num);font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.tile .sub{font-size:13px;color:var(--muted)}
+.tile.wide{grid-column:1/-1;flex-direction:row;align-items:center;gap:14px}
+.tile.wide .txt{display:flex;flex-direction:column;min-width:0;flex:1}
+.tile.ex strong{font-size:16px;font-weight:500;overflow-wrap:anywhere}
+.tile.ex .pic{width:72px;height:72px;align-self:center}
+.tile.ex .last{font-family:var(--f-num);font-size:22px;font-weight:700;line-height:1}
+.tile.add{border-style:dashed;align-items:center;justify-content:center;color:var(--accent);font-weight:500;min-height:150px;text-align:center}
+.tile.add span{font-family:var(--f-num);font-size:44px;line-height:1}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--eq)}
+.badge::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--eq)}
+.done{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:var(--up);color:var(--surface);display:grid;place-items:center;font-size:15px;font-weight:600}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* panels & forms */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel h2{font-size:16px;font-weight:600}
+.hero{display:flex;align-items:center;gap:14px}
+.hero .pic{width:92px;height:92px;flex:none}
+.hero .info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:14px}
+.kv .num{font-size:22px}
+.entry{display:grid;grid-template-columns:1fr 1fr minmax(0,2.2fr) 1fr 1fr;gap:6px;align-items:stretch}
+.entry.two{grid-template-columns:1fr minmax(0,2.2fr) 1fr}
+.step{min-height:64px;border-radius:14px;background:var(--sunk);font-family:var(--f-num);font-size:20px;font-weight:700;text-align:center}
+.step:active{background:var(--accent-soft)}
+.big{width:100%;min-height:64px;border-radius:14px;border:2px solid var(--accent);background:var(--surface);text-align:center;font-family:var(--f-num);font-size:38px;font-weight:700;padding:0 4px;-moz-appearance:textfield}
+.big::-webkit-outer-spin-button,.big::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.unit{text-align:center;font-size:13px;color:var(--muted)}
+.btn{min-height:60px;border-radius:16px;background:var(--accent);color:var(--accent-ink);font-size:18px;font-weight:600;text-align:center;padding:0 16px;width:100%}
+.btn.alt{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:none;color:var(--down);border:1px solid var(--line);min-height:48px;font-size:15px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500;min-width:0}
+.inp{min-height:56px;border-radius:14px;border:1px solid var(--line);background:var(--surface);padding:0 14px;font-size:18px;width:100%}
+textarea.inp{padding:12px 14px;font-size:13px;min-height:120px;font-family:ui-monospace,Menlo,monospace}
+.pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pick button{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:13px;min-height:84px;justify-content:center}
+.pick button .pic{width:44px;height:44px}
+.pick button.on{border:2px solid var(--accent);background:var(--accent-soft)}
+.pick.icons{grid-template-columns:repeat(5,1fr);max-height:230px;overflow-y:auto}
+.pick.icons button{min-height:60px}
+.err{color:var(--down);font-size:14px}
+
+/* result */
+.result{align-items:center;text-align:center;gap:8px}
+.result .today{font-size:64px;line-height:1}
+.delta{font-family:var(--f-num);font-size:30px;font-weight:700;line-height:1.1}
+.delta.up{color:var(--up)}.delta.down{color:var(--down)}.delta.same{color:var(--muted)}
+.pr{display:inline-block;background:var(--mc);color:var(--surface);border-radius:999px;padding:4px 14px;font-size:14px;font-weight:600}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.vs div{background:var(--sunk);border-radius:14px;padding:10px;display:flex;flex-direction:column}
+.vs .num{font-size:30px;line-height:1.1}
+
+/* lists */
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);min-width:0}
+.li:first-child{border-top:0}
+.li .pic{width:40px;height:40px;flex:none}
+.li .nm{flex:1;min-width:0;display:flex;flex-direction:column;font-size:15px;overflow-wrap:anywhere}
+.li .nm small{color:var(--muted);font-size:12px}
+.li .val{text-align:right;display:flex;flex-direction:column;align-items:flex-end;flex:none}
+.li .val .num{font-size:22px;line-height:1.1}
+.li .val small{font-size:12px;font-weight:500}
+.li .spark{width:64px;height:26px;flex:none}
+.x{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);flex:none;text-align:center;font-size:13px;color:var(--muted)}
+.x.arm{background:var(--down);color:var(--surface);border-color:var(--down)}
+.up{color:var(--up)}.down{color:var(--down)}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column}
+.stat .num{font-size:34px;line-height:1.05}
+.stat span{font-size:13px;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--sunk);border-radius:14px;padding:4px;gap:4px}
+.tabs button{min-height:44px;border-radius:11px;text-align:center;font-size:15px;font-weight:500;color:var(--muted)}
+.tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.pnav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pnav b{font-weight:600;text-align:center;flex:1}
+.pnav button{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--surface);text-align:center;font-size:20px}
+.pnav button[disabled]{opacity:.35}
+.chart{width:100%;height:auto;display:block}
+.chart text{font-family:var(--f-num);font-size:12px;fill:var(--muted);font-weight:600}
+.empty{text-align:center;color:var(--muted);padding:18px 8px}
+.sec{font-family:var(--f-num);font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+@media (max-width:360px){.entry{grid-template-columns:1fr minmax(0,2fr) 1fr}.entry .far{display:none}.tile strong{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div id="app"></div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- icons: stick-figure pictograms on a 48 grid ---------- */
+const C=(x,y,r)=>`M${x-r} ${y}a${r} ${r} 0 1 0 ${2*r} 0a${r} ${r} 0 1 0 ${-2*r} 0`;
+const DH=(x,y)=>`M${x-4} ${y}h8M${x-4} ${y-3}v6M${x+4} ${y-3}v6`;
+const DV=(x,y)=>`M${x} ${y-4}v8M${x-3} ${y-4}h6M${x-3} ${y+4}h6`;
+const STAND='V30L18 43M24 30L30 43';
+const BENCH='M8 34H34M12 34V42M30 34V42';
+const SEAT='M12 8V35H22';
+const FLOOR='M4 43H44';
+const ICONS={
+ benchFlat:[[10,28],'M14 30H30L37 25L40 41M18 30V17',C(18,13,4.5),BENCH],
+ dbFlat:[[10,28],'M14 30H30L37 25L40 41M18 30V17',DH(18,14),BENCH],
+ benchIncline:[[31,15],'M28 20L17 34L8 31L6 42M27 21L24 10',C(24,6,4),'M31 24L20 38H12M10 43H34M30 26V43'],
+ dbIncline:[[31,15],'M28 20L17 34L8 31L6 42M27 21L24 10',DH(24,7),'M31 24L20 38H12M10 43H34M30 26V43'],
+ benchDecline:[[11,34],'M15 32L29 24L37 19L40 30M17 31V19',C(17,15,4),'M9 39L34 28M12 38V43M32 29V43'],
+ flyDb:[[24,25],'M24 29Q12 28 8 18M24 29Q36 28 40 18',DH(8,15)+DH(40,15),'M15 34H33M18 34V42M30 34V42'],
+ cableMid:[[24,9],'M24 13'+STAND+'M24 17L13 21M24 17L35 21','M13 21L5 12M35 21L43 12','M4 6V43M44 6V43'],
+ cableHigh:[[24,9],'M24 13'+STAND+'M24 17L16 28M24 17L32 28','M16 28L5 7M32 28L43 7','M4 6V43M44 6V43'],
+ cableLow:[[24,9],'M24 13'+STAND+'M24 17L14 12M24 17L34 12','M14 12L5 41M34 12L43 41','M4 6V43M44 6V43'],
+ pecDeck:[[24,10],'M24 14V30M24 18H14V9M24 18H34V9M24 30L17 32V43M24 30L31 32V43','M10 7V21M38 7V21',''],
+ reversePec:[[24,10],'M24 14V30M24 18H10M24 18H38M24 30L17 32V43M24 30L31 32V43','M8 12V24M40 12V24',''],
+ machinePress:[[17,11],'M17 15L18 32H30V43M17 19H31','M33 13V25',SEAT+'M33 13L41 7'],
+ machineIncline:[[16,12],'M16 16L18 32H30V43M17 20L29 11','M27 6L33 12',SEAT+'M32 8L41 6'],
+ ohpBar:[[24,13],'M24 17'+STAND+'M24 19L15 17L14 7M24 19L33 17L34 7','M6 6H42M8 2V10M40 2V10',''],
+ ohpDb:[[24,13],'M24 17'+STAND+'M24 19L15 17L14 8M24 19L33 17L34 8',DH(14,5)+DH(34,5),''],
+ ohpMachine:[[17,13],'M17 17L18 32H30V43M17 20L23 16V7','M19 5H29',SEAT+'M29 5H38V20'],
+ lateral:[[24,10],'M24 14'+STAND+'M24 18L9 17M24 18L39 17',DV(6,17)+DV(42,17),''],
+ lateralCable:[[24,10],'M24 14'+STAND+'M24 18L39 16M24 18L20 29','M39 16L6 42','M5 8V43'],
+ lateralMachine:[[24,10],'M24 14V30M24 18L12 20M24 18L36 20M24 30L18 32V43M24 30L30 32V43','M9 14V26M39 14V26',''],
+ frontRaise:[[22,10],'M22 14V30L18 43M22 30L26 43M22 18L36 16',DV(39,16),''],
+ rearFly:[[24,19],'M24 23V31L17 43M24 31L31 43M24 24L9 19M24 24L39 19',DV(6,19)+DV(42,19),''],
+ facePull:[[15,11],'M15 15V30L11 43M15 30L19 43M15 18L24 19L27 13','M27 13L43 9','M44 4V43'],
+ uprightRow:[[24,9],'M24 13'+STAND+'M24 17L13 15L19 22M24 17L35 15L29 22','M12 22H36M12 19V25M36 19V25',''],
+ shrug:[[24,12],'M24 16'+STAND+'M24 18L15 19V30M24 18L33 19V30',DH(15,33)+DH(33,33)+'M11 11L15 7L19 11M29 11L33 7L37 11',''],
+ pulldown:[[24,15],'M24 19V32M24 21L15 18L12 9M24 21L33 18L36 9M24 32L17 34V43M24 32L31 34V43','M7 8H41M24 8V2',''],
+ pullup:[[24,13],'M24 17V31M24 19L16 15L14 6M24 19L32 15L34 6M24 31L21 38L26 43','', 'M5 5H43M6 5V43M42 5V43'],
+ rowBar:[[35,17],'M30 20L14 24L19 33L15 43M29 21L28 31',C(28,36,4.5),''],
+ rowDb:[[35,17],'M30 20L14 24L19 33L15 43M29 21L28 31',DH(28,34),''],
+ tbar:[[35,17],'M30 20L14 24L19 33L15 43M29 21L28 31','M5 42L27 33'+C(31,33,4),''],
+ seatedRow:[[14,13],'M14 17L15 32L28 29L37 33M14 21H27','M27 21H42','M43 8V43M8 35H20M37 28V38'],
+ straightArm:[[16,10],'M16 14V30L12 43M16 30L20 43M16 18L30 25','M30 25L42 6','M43 4V43'],
+ deadlift:[[32,12],'M28 15L14 22L21 32L17 43M27 16V32',C(27,37,5),''],
+ rdl:[[32,13],'M28 16L14 21L17 32L16 43M27 17V27',C(27,31,4.5),''],
+ backExt:[[34,14],'M30 17L17 26L8 38M28 19L25 27','','M14 30L20 36V43M4 43H12'],
+ curlBar:[[20,10],'M20 14V30L16 43M20 30L24 43M20 18L21 27L29 21',C(32,19,4),''],
+ curlDb:[[20,10],'M20 14V30L16 43M20 30L24 43M20 18L21 27L29 21',DH(32,20),''],
+ hammer:[[20,10],'M20 14V30L16 43M20 30L24 43M20 18L21 27L29 22',DV(31,20),''],
+ preacher:[[16,12],'M16 16L17 32H28V43M16 19L26 24L29 16',DH(30,13),'M21 29L31 22M27 25V43'],
+ curlMachine:[[16,12],'M16 16L17 32H28V43M16 19L26 24L29 16','M26 13H35','M21 29L31 22M27 25V43'],
+ curlCable:[[20,10],'M20 14V30L16 43M20 30L24 43M20 18L21 27L29 21','M29 21L42 42','M43 6V43'],
+ pushdown:[[18,10],'M18 14V30L14 43M18 30L22 43M18 18L19 27L28 31','M28 31V6','M28 5H42V43'],
+ ohExt:[[22,13],'M22 17V30L18 43M22 30L26 43M22 19L26 8L17 5',DV(14,5),''],
+ skull:[[10,28],'M14 30H30L37 25L40 41M18 30V19L11 18',C(7,18,3.5),BENCH],
+ dipMachine:[[17,11],'M17 15L18 32H30V43M17 19L14 27L24 30','M22 30H33',SEAT+'M33 30V43'],
+ dip:[[24,8],'M24 12V28L21 35L27 41M24 14L15 16L14 25M24 14L33 16L34 25','','M14 26V43M34 26V43M10 26H18M30 26H38'],
+ squat:[[28,9],'M24 15L14 27L28 30L23 43',C(20,14,4),''],
+ hack:[[28,9],'M24 15L14 27L28 30L23 43','M13 9L21 18','M4 36L19 6M4 43H44'],
+ legPress:[[8,25],'M11 28L18 37L27 25L36 18','M32 11L41 23','M5 31L14 42H26'],
+ legExt:[[15,11],'M15 15L16 31H28L39 27',C(42,24,3),'M10 10V34H24M26 34V43'],
+ legCurl:[[15,11],'M15 15L16 31H28L23 40',C(20,43,3),'M10 10V34H24'],
+ lunge:[[24,8],'M24 12V26L33 30V43M24 26L18 36L9 41M24 15L28 26',DH(29,29),''],
+ bulgarian:[[24,8],'M24 12V26L33 30V43M24 26L18 36L9 31M24 15L28 26',DH(29,29),'M3 34H13M8 34V43'],
+ hipThrust:[[9,20],'M12 23H26L36 25V42',C(25,17,4.5),'M3 27H14M5 27V43M12 27V43'],
+ abduct:[[24,9],'M24 13V28L12 33L10 43M24 28L36 33L38 43','M9 22L4 27L9 32M39 22L44 27L39 32',''],
+ adduct:[[24,9],'M24 13V28L17 34L16 43M24 28L31 34L32 43','M4 22L9 27L4 32M44 22L39 27L44 32',''],
+ calf:[[20,8],'M20 12V37L26 41M20 15L23 26','M36 30V13M31 18L36 13L41 18','M20 44H42'],
+ crunch:[[13,28],'M17 32L28 39L36 28L42 40M18 31L15 24','',FLOOR],
+ cableCrunch:[[18,29],'M21 24L31 29L27 40H39M21 25L20 20','M20 20V5','M12 4H28'],
+ machineCrunch:[[21,14],'M19 18L17 32H29V43M20 20L28 22','M30 16V28',SEAT],
+ hangRaise:[[18,14],'M18 18V31H35M18 20L13 13L16 5','','M6 4H32'],
+ legRaise:[[7,37],'M11 39H26L36 22','',FLOOR],
+ plank:[[9,26],'M13 29L42 39M14 29V39H21','',FLOOR],
+ twist:[[13,19],'M15 23L24 39L33 31L41 36M16 26L26 25',C(29,25,3.5),FLOOR],
+ abWheel:[[15,27],'M9 37L19 30L31 28L36 40L43 38',C(7,39,3.5),FLOOR],
+ run:[[28,8],'M27 13L21 26L29 32L26 43M21 26L13 30L8 28M27 15L19 17L15 23M27 15L33 21L39 18','',''],
+ walk:[[24,8],'M24 12V27L29 43M24 27L19 43M24 15L19 24M24 15L29 24','',''],
+ bike:[[27,9],'M25 13L20 26L27 30V37M25 16L33 22',C(12,36,7)+C(37,36,7),'M12 36L20 27H30L37 36M33 22L37 36'],
+ ellip:[[24,8],'M24 12V27L30 40M24 27L18 40M24 15L32 18','M32 9L30 34M12 42H22M26 42H36',''],
+ stair:[[18,7],'M18 11V24L25 27V34M18 24L16 41M18 14L24 20','','M8 43H18V36H28V29H38V22H44'],
+ swim:[[13,25],'M17 27L34 30M18 26L28 17L36 21','M4 38Q9 34 14 38T24 38T34 38T44 38',''],
+ rope:[[24,12],'M24 16V30L21 41M24 30L27 41M24 18L16 22M24 18L32 22','M16 22C4 18 8 3 24 3C40 3 44 18 32 22',''],
+ other:[null,'','M24 41C11 31 7 23 7 17a8.5 8.5 0 0 1 17-2a8.5 8.5 0 0 1 17 2c0 6-4 14-17 24z',''],
+ scale:[null,'M10 8H38Q41 8 41 11V38Q41 41 38 41H10Q7 41 7 38V11Q7 8 10 8Z','M15 21A9 9 0 0 1 33 21ZM24 21L28 15',''],
+ chart:[null,'M6 41H42','M12 35V26M21 35V17M30 35V22M39 35V9','']
+};
+function icon(name,eq){const i=ICONS[name]||ICONS.other;
+  return `<svg class="ic${eq?' eq-'+eq:''}" viewBox="0 0 48 48" aria-hidden="true">${i[3]?`<path class="m" d="${i[3]}"/>`:''}${i[1]?`<path class="b" d="${i[1]}"/>`:''}${i[0]?`<circle class="hd" cx="${i[0][0]}" cy="${i[0][1]}" r="3.6"/>`:''}${i[2]?`<path class="a" d="${i[2]}"/>`:''}</svg>`;}
+
+/* ---------- catalogue ---------- */
+const PARTS=[['chest','อก','Chest','benchFlat'],['shoulder','ไหล่','Shoulder','ohpDb'],['back','หลัง','Back','pulldown'],
+             ['arm','แขน','Arm','curlDb'],['leg','ขา','Leg','squat'],['abs','หน้าท้อง','Abs','crunch']];
+const EQ={fw:'ฟรีเวท',mc:'แมชชีน',cb:'เคเบิล',bw:'บอดี้เวท'};
+const UNIT={kg:'กก.',rep:'ครั้ง',sec:'วินาที'};
+// id, part, name, equipment, icon, unit
+const BASE=[
+ ['incline-bench','chest','Incline Bench Press','fw','benchIncline'],['incline-db','chest','Incline Dumbbell Press','fw','dbIncline'],
+ ['incline-machine','chest','Incline Machine Press','mc','machineIncline'],['bench','chest','Bench Press','fw','benchFlat'],
+ ['db-press','chest','Dumbbell Press','fw','dbFlat'],['machine-press','chest','Machine Chest Press','mc','machinePress'],
+ ['decline-press','chest','Decline Press','fw','benchDecline'],['db-fly','chest','Dumbbell Fly','fw','flyDb'],
+ ['pec-deck','chest','Pec Deck Fly','mc','pecDeck'],['cable-fly','chest','Cable Fly','cb','cableMid'],
+ ['cable-low-chest','chest','Cable Fly อกล่าง','cb','cableHigh'],['cable-up-chest','chest','Cable Fly อกบน','cb','cableLow'],
+ ['chest-dip','chest','Chest Dip','bw','dip','rep'],
+ ['ohp','shoulder','Overhead Press','fw','ohpBar'],['db-shoulder-press','shoulder','Dumbbell Shoulder Press','fw','ohpDb'],
+ ['machine-shoulder-press','shoulder','Machine Shoulder Press','mc','ohpMachine'],['side-lateral','shoulder','Side Lateral Raise','fw','lateral'],
+ ['cable-lateral','shoulder','Cable Lateral Raise','cb','lateralCable'],['machine-lateral','shoulder','Machine Lateral Raise','mc','lateralMachine'],
+ ['front-raise','shoulder','Front Raise','fw','frontRaise'],['rear-fly','shoulder','Rear Delt Fly','fw','rearFly'],
+ ['reverse-pec','shoulder','Reverse Pec Deck','mc','reversePec'],['face-pull','shoulder','Face Pull','cb','facePull'],
+ ['upright-row','shoulder','Upright Row','fw','uprightRow'],['shrug','shoulder','Shrug','fw','shrug'],
+ ['lat-pulldown','back','Lat Pulldown','cb','pulldown'],['pull-up','back','Pull-up','bw','pullup','rep'],
+ ['barbell-row','back','Barbell Row','fw','rowBar'],['db-row','back','Dumbbell Row','fw','rowDb'],
+ ['seated-row','back','Seated Cable Row','cb','seatedRow'],['machine-row','back','Machine Row','mc','seatedRow'],
+ ['tbar-row','back','T-Bar Row','fw','tbar'],['straight-arm','back','Straight-arm Pulldown','cb','straightArm'],
+ ['deadlift','back','Deadlift','fw','deadlift'],['back-ext','back','Back Extension','bw','backExt','rep'],
+ ['barbell-curl','arm','Barbell Curl','fw','curlBar'],['db-curl','arm','Dumbbell Curl','fw','curlDb'],
+ ['hammer-curl','arm','Hammer Curl','fw','hammer'],['preacher-curl','arm','Preacher Curl','fw','preacher'],
+ ['machine-curl','arm','Machine Curl','mc','curlMachine'],['cable-curl','arm','Cable Curl','cb','curlCable'],
+ ['pushdown','arm','Triceps Pushdown','cb','pushdown'],['oh-ext','arm','Overhead Triceps Extension','fw','ohExt'],
+ ['skull','arm','Skull Crusher','fw','skull'],['dip-machine','arm','Triceps Dip Machine','mc','dipMachine'],
+ ['squat','leg','Squat','fw','squat'],['hack-squat','leg','Hack Squat','mc','hack'],['leg-press','leg','Leg Press','mc','legPress'],
+ ['leg-ext','leg','Leg Extension','mc','legExt'],['leg-curl','leg','Leg Curl','mc','legCurl'],
+ ['rdl','leg','Romanian Deadlift','fw','rdl'],['lunge','leg','Lunge','fw','lunge'],['bulgarian','leg','Bulgarian Split Squat','fw','bulgarian'],
+ ['hip-thrust','leg','Hip Thrust','fw','hipThrust'],['hip-abduct','leg','Hip Abduction','mc','abduct'],
+ ['hip-adduct','leg','Hip Adduction','mc','adduct'],['calf-raise','leg','Calf Raise','mc','calf'],
+ ['crunch','abs','Crunch','bw','crunch','rep'],['cable-crunch','abs','Cable Crunch','cb','cableCrunch'],
+ ['machine-crunch','abs','Machine Crunch','mc','machineCrunch'],['hanging-raise','abs','Hanging Leg Raise','bw','hangRaise','rep'],
+ ['leg-raise','abs','Leg Raise','bw','legRaise','rep'],['plank','abs','Plank','bw','plank','sec'],
+ ['russian-twist','abs','Russian Twist','fw','twist'],['ab-wheel','abs','Ab Wheel','bw','abWheel','rep']
+].map(a=>({id:a[0],part:a[1],name:a[2],eq:a[3],icon:a[4],unit:a[5]||'kg'}));
+const CARDIO=[['run','วิ่ง','run'],['walk','เดิน','walk'],['bike','ปั่นจักรยาน','bike'],['ellip','Elliptical','ellip'],['stair','ขึ้นบันได','stair'],
+              ['row','กรรเชียง','seatedRow'],['swim','ว่ายน้ำ','swim'],['rope','กระโดดเชือก','rope'],['other','อื่นๆ','other']];
+const DEFICON={fw:'curlDb',mc:'machinePress',cb:'cableMid',bw:'pullup'};
+
+/* ---------- state & storage ---------- */
+const LS='dailyfit.v1';
+const RE_D=/^\d{4}-\d{2}-\d{2}$/,RE_ID=/^[a-z0-9-]{1,40}$/;
+let state={custom:[],lifts:{},cardio:{},weight:{},t:{}};
+const num=(v,max)=>{v=typeof v==='string'?parseFloat(v.replace(',','.')):+v;return isFinite(v)&&v>=0&&v<=max?Math.round(v*100)/100:null};
+function sanCustom(a){const out=[];(Array.isArray(a)?a:[]).slice(0,300).forEach(c=>{
+  if(!c||!RE_ID.test(c.id)||!PARTS.some(p=>p[0]===c.part)||!EQ[c.eq])return;
+  out.push({id:c.id,part:c.part,name:String(c.name||'').slice(0,60)||'ท่าใหม่',eq:c.eq,icon:ICONS[c.icon]?c.icon:DEFICON[c.eq],unit:UNIT[c.unit]?c.unit:'kg',del:!!c.del});});return out}
+function sanLogs(src){const o={lifts:{},cardio:{},weight:{}};src=src||{};
+  Object.keys(src.lifts||{}).forEach(d=>{if(!RE_D.test(d))return;const day={};Object.keys(src.lifts[d]||{}).forEach(id=>{const v=num(src.lifts[d][id],100000);if(RE_ID.test(id)&&v!==null)day[id]=v});if(Object.keys(day).length)o.lifts[d]=day});
+  Object.keys(src.cardio||{}).forEach(d=>{if(!RE_D.test(d)||!Array.isArray(src.cardio[d]))return;const arr=[];src.cardio[d].slice(0,50).forEach(e=>{const m=num(e&&e.min,3000),k=num(e&&e.kcal,100000);
+    if(m===null||!CARDIO.some(c=>c[0]===e.type))return;arr.push({id:RE_ID.test(e.id)?e.id:uid(),type:e.type,min:m,kcal:k||0})});if(arr.length)o.cardio[d]=arr});
+  Object.keys(src.weight||{}).forEach(d=>{const v=num(src.weight[d],700);if(RE_D.test(d)&&v)o.weight[d]=v});return o}
+function sanState(s){s=s||{};const l=sanLogs(s);const t={};Object.keys(s.t||{}).forEach(k=>{if(k==='cfg'||/^y\d{4}$/.test(k))t[k]=+s.t[k]||0});
+  return {custom:sanCustom(s.custom),lifts:l.lifts,cardio:l.cardio,weight:l.weight,t}}
+function uid(){return 'c'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36)}
+try{const raw=localStorage.getItem(LS);if(raw)state=sanState(JSON.parse(raw))}catch(e){}
+function saveLocal(){try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}}
+
+/* cloud copy (only inside a Claude artifact; elsewhere this stays null and data lives in this browser) */
+let cloud=null,syncState='local';const pending=new Set();let pushTimer=0;
+function slice(k){if(k==='cfg')return {custom:state.custom};const y=k.slice(1),o={lifts:{},cardio:{},weight:{}};
+  ['lifts','cardio','weight'].forEach(n=>Object.keys(state[n]).forEach(d=>{if(d.slice(0,4)===y)o[n][d]=state[n][d]}));return o}
+function applySlice(k,obj,t){if(k==='cfg')state.custom=sanCustom(obj.custom);else{const y=k.slice(1),l=sanLogs(obj);
+  ['lifts','cardio','weight'].forEach(n=>{Object.keys(state[n]).forEach(d=>{if(d.slice(0,4)===y)delete state[n][d]});
+    Object.keys(l[n]).forEach(d=>{if(d.slice(0,4)===y)state[n][d]=l[n][d]})})}state.t[k]=t}
+function setSync(s){syncState=s;const el=document.getElementById('sync');if(el)el.textContent=syncText()}
+function syncText(){return syncState==='synced'?'ซิงก์กับบัญชี Claude แล้ว':syncState==='saving'?'กำลังซิงก์…':syncState==='error'?'ซิงก์ไม่สำเร็จ ข้อมูลยังอยู่ในเครื่องนี้':'เก็บข้อมูลไว้ในเบราว์เซอร์นี้'}
+function flush(){if(!cloud||!pending.size)return;const keys=[...pending];pending.clear();setSync('saving');
+  cloud.q=cloud.q.then(()=>Promise.all(keys.map(k=>cloud.col.doc(k).set({t:state.t[k]||Date.now(),data:JSON.stringify(slice(k))}))))
+    .then(()=>{if(!pending.size)setSync('synced')},()=>setSync('error'))}
+function touch(k){state.t[k]=Date.now();saveLocal();if(cloud){pending.add(k);clearTimeout(pushTimer);pushTimer=setTimeout(flush,700)}}
+const touchDay=d=>touch('y'+d.slice(0,4));
+async function initCloud(){try{
+  if(!window.claude||typeof window.claude.use!=='function')return;
+  const [db,user]=await Promise.all([window.claude.use('db'),window.claude.use('user')]);if(!db||!user)return;
+  const id=await user.id();if(!id)return;
+  const col=db.collection('data/users/'+id);const snap=await col.get();
+  cloud={col,q:Promise.resolve()};const seen={};let changed=false;
+  snap.docs.forEach(d=>{const b=d.data();if(!b||!(d.id==='cfg'||/^y\d{4}$/.test(d.id)))return;seen[d.id]=1;const ct=+b.t||0,lt=state.t[d.id]||0;
+    if(ct>lt){try{applySlice(d.id,JSON.parse(b.data),ct);changed=true}catch(e){}}else if(lt>ct)pending.add(d.id)});
+  Object.keys(state.t).forEach(k=>{if(!seen[k])pending.add(k)});
+  if(changed){saveLocal();render()}
+  if(pending.size)flush();else setSync('synced');
+}catch(e){setSync(cloud?'error':'local')}}
+
+/* ---------- helpers ---------- */
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>String(Math.round(n*100)/100);
+const sign=n=>(n>0?'+':n<0?'−':'')+fmt(Math.abs(n));
+const pad=n=>String(n).padStart(2,'0');
+const key=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=k=>new Date(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8,10));
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const today=()=>key(new Date());
+const WD=['อา','จ','อ','พ','พฤ','ศ','ส'];
+const MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const dl=k=>+k.slice(8,10)+' '+MON[+k.slice(5,7)-1];
+function ago(k){const n=Math.round((parse(today())-parse(k))/864e5);return n<=0?'วันนี้':n===1?'เมื่อวาน':n<60?n+' วันก่อน':dl(k)}
+const allEx=()=>BASE.concat(state.custom);
+const exById=id=>allEx().find(e=>e.id===id);
+const partOf=id=>PARTS.find(p=>p[0]===id);
+function hist(id){return Object.keys(state.lifts).filter(d=>state.lifts[d][id]!=null).sort().map(d=>({d,v:state.lifts[d][id]}))}
+const eqBadge=e=>`<span class="badge eq-${e.eq}">${EQ[e.eq]}</span>`;
+const pic=(name,eq)=>`<span class="pic">${icon(name,eq)}</span>`;
+
+/* ---------- charts ---------- */
+function spark(vals){if(vals.length<2)return '';const mn=Math.min(...vals),mx=Math.max(...vals),r=mx-mn||1;
+  const p=vals.map((v,i)=>[2+i*60/(vals.length-1),22-(v-mn)/r*18]);
+  return `<svg class="spark" viewBox="0 0 64 26" aria-hidden="true"><path d="M${p.map(a=>a[0].toFixed(1)+' '+a[1].toFixed(1)).join('L')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${p[p.length-1][0]}" cy="${p[p.length-1][1].toFixed(1)}" r="3" fill="var(--accent)"/></svg>`}
+function lineChart(pts,unit){ // pts:[{label,v}]
+  if(pts.length<2)return '';const vs=pts.map(p=>p.v);let mn=Math.min(...vs),mx=Math.max(...vs);if(mx===mn){mx+=1;mn-=1}
+  const X0=40,X1=306,Y0=14,Y1=92,x=i=>X0+i*(X1-X0)/(pts.length-1),y=v=>Y1-(v-mn)/(mx-mn)*(Y1-Y0);
+  const d=pts.map((p,i)=>x(i).toFixed(1)+' '+y(p.v).toFixed(1)).join('L'),last=pts.length-1;
+  return `<svg class="chart" viewBox="0 0 320 116" role="img" aria-label="กราฟ ${esc(unit)} จาก ${fmt(pts[0].v)} ถึง ${fmt(pts[last].v)}">
+  <path d="M${X0} ${Y0}H${X1}M${X0} ${Y1}H${X1}" stroke="var(--line)" stroke-width="1" fill="none"/>
+  <path d="M${d}L${X1} ${Y1}L${X0} ${Y1}Z" fill="var(--accent-soft)" stroke="none"/>
+  <path d="M${d}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="${x(last)}" cy="${y(pts[last].v).toFixed(1)}" r="4.5" fill="var(--accent)"/>
+  <text x="${X0-6}" y="${Y0+4}" text-anchor="end">${fmt(mx)}</text><text x="${X0-6}" y="${Y1+4}" text-anchor="end">${fmt(mn)}</text>
+  <text x="${X0}" y="110">${esc(pts[0].label)}</text><text x="${X1}" y="110" text-anchor="end">${esc(pts[last].label)}</text></svg>`}
+function barChart(bars,unit){ // bars:[{label,v,show}]
+  const mx=Math.max(...bars.map(b=>b.v));if(!(mx>0))return '';
+  const X0=40,X1=314,Y0=14,Y1=92,w=(X1-X0)/bars.length,bw=Math.max(2,Math.min(26,w*0.7));
+  return `<svg class="chart" viewBox="0 0 320 116" role="img" aria-label="กราฟแท่ง ${esc(unit)} สูงสุด ${fmt(mx)}">
+  <path d="M${X0} ${Y0}H${X1}M${X0} ${Y1}H${X1}" stroke="var(--line)" stroke-width="1" fill="none"/>
+  <text x="${X0-6}" y="${Y0+4}" text-anchor="end">${fmt(mx)}</text><text x="${X0-6}" y="${Y1+4}" text-anchor="end">0</text>
+  ${bars.map((b,i)=>{const h=b.v/mx*(Y1-Y0),cx=X0+w*(i+.5);return (b.v>0?`<rect x="${(cx-bw/2).toFixed(1)}" y="${(Y1-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(3,bw/2)}" fill="var(--cb)"/>`:'')+(b.show?`<text x="${cx.toFixed(1)}" y="110" text-anchor="middle">${esc(b.label)}</text>`:'')}).join('')}</svg>`}
+
+/* ---------- view state ---------- */
+let cur=today(),filter='all',saved=null,sumKind='week',sumOff=0,armed=null,addForm=null,cardioType='run',showBackup=false,msg='';
+const app=document.getElementById('app');
+const route=()=>location.hash.replace(/^#/,'');
+function go(h){if(route()===h)render();else location.hash=h}
+const backBtn=to=>`<button class="back" data-go="${to}" aria-label="ย้อนกลับ"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
+const dayNote=()=>cur===today()?'':`<p class="small" style="color:var(--mc)">กำลังบันทึกย้อนหลังของวันที่ ${dl(cur)}</p>`;
+
+function vHome(){
+  const t=today(),td=parse(t),mon=addDays(td,-((td.getDay()+6)%7));
+  const days=[...Array(7)].map((_,i)=>{const k=key(addDays(mon,i)),l=state.lifts[k],c=state.cardio[k];
+    return `<button class="day${k===cur?' sel':''}" data-day="${k}"${k>t?' disabled':''} aria-label="${dl(k)}"><span>${WD[(i+1)%7]}</span><b>${+k.slice(8)}</b><span class="dots">${l?'<i></i>':''}${c?'<i class="c"></i>':''}</span></button>`}).join('');
+  const lifts=state.lifts[cur]||{},card=state.cardio[cur]||[];
+  const tiles=PARTS.map(p=>{const ids=allEx().filter(e=>e.part===p[0]).map(e=>e.id);const n=ids.filter(i=>lifts[i]!=null).length;
+    let last='';Object.keys(state.lifts).forEach(d=>{if(d>last&&ids.some(i=>state.lifts[d][i]!=null))last=d});
+    return `<button class="tile" data-go="${p[0]}">${pic(p[3])}<strong>${p[1]}</strong><span class="en">${p[2]}</span><span class="sub">${n?`บันทึกแล้ว ${n} ท่า`:last?'ล่าสุด '+ago(last):'ยังไม่เคยบันทึก'}</span>${n?'<span class="done">✓</span>':''}</button>`}).join('');
+  const cm=card.reduce((s,e)=>s+e.min,0),ck=card.reduce((s,e)=>s+e.kcal,0),w=state.weight[cur];
+  return `<header class="top"><div class="brand">Daily <i>Fit</i></div><span style="flex:1"></span><button class="ghost" data-go="summary">ดูสรุป</button></header>
+  <div class="week">${days}</div>
+  <div class="datebar"><span class="muted small">${cur===t?'วันนี้ '+dl(cur):'บันทึกของวันที่ '+dl(cur)}</span>
+    <label class="small muted">วันอื่น <input type="date" id="pickdate" value="${cur}" max="${t}"></label></div>
+  <div class="grid">${tiles}
+    <button class="tile wide" data-go="cardio">${pic('run','cb')}<span class="txt"><strong>คาร์ดิโอ</strong><span class="sub">${card.length?`${fmt(cm)} นาที · ${fmt(ck)} kcal`:'จดนาทีและแคลอรี่'}</span></span>${card.length?'<span class="done">✓</span>':''}</button>
+    <button class="tile" data-go="bodyweight">${pic('scale')}<strong>น้ำหนักตัว</strong><span class="sub">${w?fmt(w)+' กก.':'ชั่งแล้วจดไว้'}</span>${w?'<span class="done">✓</span>':''}</button>
+    <button class="tile" data-go="summary">${pic('chart')}<strong>สรุปผล</strong><span class="sub">สัปดาห์ · เดือน · ปี</span></button>
+  </div>
+  <div class="foot"><span id="sync">${syncText()}</span><button class="ghost" data-act="backup">สำรองข้อมูล</button></div>
+  ${showBackup?`<div class="panel"><h2>สำรองและกู้คืนข้อมูล</h2><p class="small muted">คัดลอกข้อความนี้เก็บไว้ หรือวางข้อมูลสำรองแล้วกดนำเข้า การนำเข้าจะแทนที่ข้อมูลทั้งหมดในเครื่องนี้</p>
+    <textarea class="inp" id="bk" spellcheck="false">${esc(JSON.stringify({custom:state.custom,lifts:state.lifts,cardio:state.cardio,weight:state.weight}))}</textarea>
+    <div class="row2"><button class="btn alt" data-act="copy">คัดลอก</button><button class="btn alt" data-act="import">${armed==='import'?'แตะอีกครั้งเพื่อแทนที่':'นำเข้า'}</button></div>${msg?`<p class="small">${esc(msg)}</p>`:''}</div>`:''}`;
+}
+
+function vPart(p){
+  const lifts=state.lifts[cur]||{};
+  const list=allEx().filter(e=>e.part===p[0]&&!e.del&&(filter==='all'||e.eq===filter));
+  const chips=[['all','ทั้งหมด']].concat(Object.entries(EQ)).map(([k,l])=>`<button class="chip${filter===k?' on':''}" data-filter="${k}">${l}</button>`).join('');
+  return `<header class="top">${backBtn('')}<h1>${p[1]}<small>เลือกท่าที่เล่น</small></h1></header>${dayNote()}
+  <div class="chips">${chips}</div>
+  <div class="grid">${list.map(e=>{const h=hist(e.id),l=h[h.length-1];
+    return `<button class="tile ex" data-go="x-${e.id}">${pic(e.icon,e.eq)}<strong>${esc(e.name)}</strong>${eqBadge(e)}<span class="last">${l?fmt(l.v)+' <span class="small muted" style="font-family:var(--f-ui);font-weight:400">'+UNIT[e.unit]+'</span>':'<span class="small muted" style="font-family:var(--f-ui);font-weight:400">ยังไม่มีสถิติ</span>'}</span>${lifts[e.id]!=null?'<span class="done">✓</span>':''}</button>`}).join('')}
+    <button class="tile add" data-go="add-${p[0]}"><span>+</span>เพิ่มท่าใหม่</button></div>`;
+}
+
+function vEx(e){
+  const p=partOf(e.part),h=hist(e.id),tv=(state.lifts[cur]||{})[e.id];
+  const prev=h.filter(x=>x.d<cur).pop(),others=h.filter(x=>x.d!==cur),best=others.length?Math.max(...others.map(x=>x.v)):null;
+  const u=UNIT[e.unit],steps=e.unit==='kg'?[-5,-2.5,2.5,5]:e.unit==='rep'?[-5,-1,1,5]:[-10,-5,5,10];
+  const head=`<header class="top">${backBtn(p[0])}<h1>${esc(e.name)}<small>${p[1]} · ${EQ[e.eq]}</small></h1></header>${dayNote()}`;
+  const chart=h.length>1?`<div class="panel"><h2>${h.length} ครั้งล่าสุด</h2>${lineChart(h.slice(-12).map(x=>({label:dl(x.d),v:x.v})),u)}</div>`.replace(h.length+' ครั้งล่าสุด',Math.min(12,h.length)+' ครั้งล่าสุด'):'';
+  if(saved===e.id&&tv!=null){
+    let d='';if(prev){const diff=tv-prev.v,pc=prev.v?diff/prev.v*100:0;
+      d=`<div class="delta ${diff>0?'up':diff<0?'down':'same'}">${diff>0?'▲':diff<0?'▼':'='} ${diff===0?'เท่าครั้งก่อน':sign(diff)+' '+u+(prev.v?` (${sign(pc).replace(/(\.\d)\d$/,'$1')}%)`:'')}</div>`}
+    else d=`<div class="delta same">บันทึกครั้งแรก</div>`;
+    return head+`<div class="panel result">${best!==null&&tv>best?'<span class="pr">สถิติใหม่</span>':''}
+      <span class="muted">${cur===today()?'วันนี้':dl(cur)}</span><div class="num today">${fmt(tv)} <span style="font-size:24px">${u}</span></div>${d}
+      <div class="vs"><div><span class="small muted">ครั้งก่อน${prev?' · '+dl(prev.d):''}</span><span class="num">${prev?fmt(prev.v)+' '+u:'–'}</span></div>
+      <div><span class="small muted">สูงสุดที่เคยทำ</span><span class="num">${fmt(Math.max(tv,best===null?0:best))} ${u}</span></div></div></div>
+      ${chart}<button class="btn" data-go="${p[0]}">ท่าต่อไป</button>
+      <div class="row2"><button class="btn alt" data-act="edit">แก้ไข</button><button class="btn alt" data-go="">หน้าแรก</button></div>`;
+  }
+  const start=tv!=null?tv:prev?prev.v:'';
+  return head+`<div class="panel"><div class="hero">${pic(e.icon,e.eq)}<div class="info">${eqBadge(e)}
+      <div class="kv"><span class="muted">ครั้งก่อน${prev?' · '+ago(prev.d):''}</span><span class="num">${prev?fmt(prev.v)+' '+u:'–'}</span></div>
+      <div class="kv"><span class="muted">สูงสุด</span><span class="num">${best!==null?fmt(best)+' '+u:'–'}</span></div></div></div></div>
+    <div class="panel"><h2>${e.unit==='kg'?'น้ำหนักมากสุดที่ยกได้':e.unit==='rep'?'จำนวนครั้งมากสุด':'นานสุดกี่วินาที'}${cur===today()?'วันนี้':''}</h2>
+      <div class="entry"><button class="step far" data-step="${steps[0]}">${sign(steps[0])}</button><button class="step" data-step="${steps[1]}">${sign(steps[1])}</button>
+        <input class="big" id="val" type="number" inputmode="decimal" step="any" min="0" value="${start}" placeholder="0" aria-label="${u}">
+        <button class="step" data-step="${steps[2]}">${sign(steps[2])}</button><button class="step far" data-step="${steps[3]}">${sign(steps[3])}</button></div>
+      <div class="unit">${u}</div>${msg?`<p class="err">${esc(msg)}</p>`:''}
+      <button class="btn" data-act="save-lift">บันทึก</button>
+      ${tv!=null?`<button class="btn danger" data-act="del-lift">${armed==='lift'?'แตะอีกครั้งเพื่อลบ':'ลบที่บันทึกไว้ของวันนี้'}</button>`:''}</div>
+    ${chart}${state.custom.includes(e)?`<button class="btn danger" data-act="del-ex">${armed==='ex'?'แตะอีกครั้งเพื่อลบท่านี้':'ลบท่านี้ออกจากรายการ'}</button>`:''}`;
+}
+
+function vAdd(p){
+  if(!addForm||addForm.part!==p[0])addForm={part:p[0],name:'',eq:'fw',icon:''};const f=addForm,ic=f.icon||DEFICON[f.eq];
+  const names=Object.keys(ICONS).filter(k=>ICONS[k][0]&&!CARDIO.some(c=>c[2]===k&&k!=='seatedRow'));
+  return `<header class="top">${backBtn(p[0])}<h1>เพิ่มท่าใหม่<small>${p[1]}</small></h1></header>
+  <div class="panel"><label class="f">ชื่อท่า<input class="inp" id="newname" maxlength="60" value="${esc(f.name)}" placeholder="เช่น Smith Machine Press"></label>
+    <span class="f">ประเภทอุปกรณ์</span><div class="pick" style="grid-template-columns:repeat(2,1fr)">${Object.entries(EQ).map(([k,l])=>`<button class="${f.eq===k?'on':''}" data-eq="${k}" style="min-height:56px"><span class="badge eq-${k}">${l}</span></button>`).join('')}</div>
+    <span class="f">ไอคอน</span><div class="pick icons">${names.map(k=>`<button class="${ic===k?'on':''}" data-icon="${k}" aria-label="${k}">${pic(k,f.eq)}</button>`).join('')}</div>
+    ${msg?`<p class="err">${esc(msg)}</p>`:''}<button class="btn" data-act="save-ex">เพิ่มท่านี้</button></div>`;
+}
+
+function vCardio(){
+  const list=state.cardio[cur]||[],tm=list.reduce((s,e)=>s+e.min,0),tk=list.reduce((s,e)=>s+e.kcal,0);
+  return `<header class="top">${backBtn('')}<h1>คาร์ดิโอ<small>${cur===today()?'วันนี้':dl(cur)}</small></h1></header>
+  <div class="panel"><h2>กิจกรรม</h2><div class="pick">${CARDIO.map(c=>`<button class="${cardioType===c[0]?'on':''}" data-ctype="${c[0]}">${pic(c[2],'cb')}${c[1]}</button>`).join('')}</div>
+    <div class="row2"><label class="f">นาที<input class="inp num" id="cmin" type="number" inputmode="decimal" min="0" placeholder="30"></label>
+    <label class="f">แคลอรี่ (kcal)<input class="inp num" id="ckcal" type="number" inputmode="decimal" min="0" placeholder="150"></label></div>
+    ${msg?`<p class="err">${esc(msg)}</p>`:''}<button class="btn" data-act="add-cardio">เพิ่มกิจกรรม</button></div>
+  <div class="panel"><h2>รวม${cur===today()?'วันนี้':'วันที่ '+dl(cur)}</h2>
+    <div class="stats"><div class="stat" style="background:var(--sunk);border:0"><span class="num">${fmt(tm)}</span><span>นาที</span></div><div class="stat" style="background:var(--sunk);border:0"><span class="num">${fmt(tk)}</span><span>kcal</span></div></div>
+    ${list.length?`<div class="list">${list.map(e=>{const c=CARDIO.find(x=>x[0]===e.type);return `<div class="li">${pic(c[2],'cb')}<span class="nm">${c[1]}<small>${fmt(e.min)} นาที</small></span><span class="val"><span class="num">${fmt(e.kcal)}</span><small class="muted">kcal</small></span><button class="x${armed==='c'+e.id?' arm':''}" data-delc="${e.id}" aria-label="ลบ ${c[1]}">${armed==='c'+e.id?'ลบ?':'ลบ'}</button></div>`}).join('')}</div>`
+      :'<p class="empty">ยังไม่มีกิจกรรม เลือกกิจกรรมแล้วใส่นาทีกับแคลอรี่ด้านบน</p>'}</div>
+  <button class="btn alt" data-act="finish">จบวันนี้ ดูสรุป</button>`;
+}
+
+function vWeight(){
+  const ds=Object.keys(state.weight).sort(),tv=state.weight[cur],prev=ds.filter(d=>d<cur).pop();
+  const start=tv||(prev?state.weight[prev]:'');
+  return `<header class="top">${backBtn('')}<h1>น้ำหนักตัว<small>${cur===today()?'วันนี้':dl(cur)}</small></h1></header>
+  <div class="panel"><div class="kv"><span class="muted">ครั้งก่อน${prev?' · '+ago(prev):''}</span><span class="num">${prev?fmt(state.weight[prev])+' กก.':'–'}</span></div>
+    ${tv&&prev?`<div class="kv"><span class="muted">เปลี่ยนแปลง</span><span class="num">${sign(tv-state.weight[prev])} กก.</span></div>`:''}
+    <div class="entry"><button class="step far" data-step="-1">−1</button><button class="step" data-step="-0.1">−0.1</button>
+      <input class="big" id="val" type="number" inputmode="decimal" step="any" min="0" value="${start}" placeholder="0" aria-label="กิโลกรัม">
+      <button class="step" data-step="0.1">+0.1</button><button class="step far" data-step="1">+1</button></div><div class="unit">กก.</div>
+    ${msg?`<p class="err">${esc(msg)}</p>`:''}<button class="btn" data-act="save-weight">${tv?'บันทึกแล้ว แก้ไขได้':'บันทึก'}</button></div>
+  ${ds.length>1?`<div class="panel"><h2>แนวโน้ม</h2>${lineChart(ds.slice(-30).map(d=>({label:dl(d),v:state.weight[d]})),'กก.')}</div>`:''}
+  ${ds.length?`<div class="panel"><h2>ที่จดไว้ล่าสุด</h2><div class="list">${ds.slice(-10).reverse().map(d=>`<div class="li"><span class="nm">${dl(d)}<small>${ago(d)}</small></span><span class="val"><span class="num">${fmt(state.weight[d])}</span><small class="muted">กก.</small></span><button class="x${armed==='w'+d?' arm':''}" data-delw="${d}" aria-label="ลบ ${dl(d)}">${armed==='w'+d?'ลบ?':'ลบ'}</button></div>`).join('')}</div></div>`:''}`;
+}
+
+function period(kind,off){
+  const t=parse(today());let s,e,label,buckets=[];
+  if(kind==='day'){s=e=addDays(parse(cur),off);label=key(s)===today()?'วันนี้ '+dl(key(s)):WD[s.getDay()]+' '+dl(key(s))}
+  else if(kind==='week'){s=addDays(t,-((t.getDay()+6)%7)+off*7);e=addDays(s,6);label=dl(key(s))+' – '+dl(key(e));
+    for(let i=0;i<7;i++){const k=key(addDays(s,i));buckets.push({label:WD[(i+1)%7],a:k,b:k,show:1})}}
+  else if(kind==='month'){s=new Date(t.getFullYear(),t.getMonth()+off,1);e=new Date(s.getFullYear(),s.getMonth()+1,0);label=MON[s.getMonth()]+' '+(s.getFullYear()+543);
+    for(let i=1;i<=e.getDate();i++){const k=key(new Date(s.getFullYear(),s.getMonth(),i));buckets.push({label:String(i),a:k,b:k,show:i%7===1})}}
+  else{s=new Date(t.getFullYear()+off,0,1);e=new Date(s.getFullYear(),11,31);label='ปี '+(s.getFullYear()+543);
+    for(let i=0;i<12;i++)buckets.push({label:MON[i].replace(/\./g,''),a:key(new Date(s.getFullYear(),i,1)),b:key(new Date(s.getFullYear(),i+1,0)),show:i%2===0})}
+  return {a:key(s),b:key(e),label,buckets};
+}
+function vSummary(){
+  const P=period(sumKind,sumOff),Q=sumKind==='day'?null:period(sumKind,sumOff-1),inP=d=>d>=P.a&&d<=P.b;
+  const ld=Object.keys(state.lifts).filter(inP).sort(),cd=Object.keys(state.cardio).filter(inP).sort(),wd=Object.keys(state.weight).filter(inP).sort();
+  const active=new Set(ld.concat(cd)).size;let nl=0;const best={};
+  ld.forEach(d=>Object.keys(state.lifts[d]).forEach(id=>{nl++;(best[id]=best[id]||[]).push(state.lifts[d][id])}));
+  let tm=0,tk=0;const byType={};cd.forEach(d=>state.cardio[d].forEach(e=>{tm+=e.min;tk+=e.kcal;const o=byType[e.type]=byType[e.type]||{n:0,min:0,kcal:0};o.n++;o.min+=e.min;o.kcal+=e.kcal}));
+  const tabs=[['day','วัน'],['week','สัปดาห์'],['month','เดือน'],['year','ปี']].map(([k,l])=>`<button class="${sumKind===k?'on':''}" data-kind="${k}">${l}</button>`).join('');
+  const canNext=sumKind==='day'?key(addDays(parse(cur),sumOff))<today():sumOff<0;
+  let strength='';
+  PARTS.forEach(p=>{const rows=allEx().filter(e=>e.part===p[0]&&best[e.id]).map(e=>{const vals=best[e.id],mx=Math.max(...vals),u=UNIT[e.unit];let pv=null;
+      if(Q){Object.keys(state.lifts).forEach(d=>{if(d>=Q.a&&d<=Q.b&&state.lifts[d][e.id]!=null)pv=Math.max(pv===null?0:pv,state.lifts[d][e.id])})}
+      else{const h=hist(e.id).filter(x=>x.d<P.a).pop();if(h)pv=h.v}
+      const diff=pv===null?null:mx-pv;
+      return `<div class="li">${pic(e.icon,e.eq)}<span class="nm">${esc(e.name)}<small>${vals.length>1?vals.length+' ครั้ง':EQ[e.eq]}</small></span>${spark(vals)}<span class="val"><span class="num">${fmt(mx)} ${u}</span><small class="${diff>0?'up':diff<0?'down':'muted'}">${diff===null?'ครั้งแรก':diff===0?'เท่าเดิม':(diff>0?'▲ ':'▼ ')+sign(diff)}</small></span></div>`});
+    if(rows.length)strength+=`<div class="sec">${p[1]}</div><div class="list">${rows.join('')}</div>`});
+  const cmp=sumKind==='day'?'เทียบกับครั้งก่อน':sumKind==='week'?'เทียบกับสัปดาห์ก่อน':sumKind==='month'?'เทียบกับเดือนก่อน':'เทียบกับปีก่อน';
+  const bars=P.buckets.map(b=>({label:b.label,show:b.show,v:cd.filter(d=>d>=b.a&&d<=b.b).reduce((s,d)=>s+state.cardio[d].reduce((x,e)=>x+e.min,0),0)}));
+  const w0=wd.length?state.weight[wd[0]]:null,w1=wd.length?state.weight[wd[wd.length-1]]:null;
+  const wPrev=Object.keys(state.weight).filter(d=>d<P.a).sort().pop(),wBase=sumKind==='day'||wd.length<2?(wPrev?state.weight[wPrev]:null):w0;
+  const nothing=!ld.length&&!cd.length&&!wd.length;
+  return `<header class="top">${backBtn('')}<h1>สรุปผล<small>ความคืบหน้าของคุณ</small></h1></header>
+  <div class="tabs">${tabs}</div>
+  <div class="pnav"><button data-off="-1" aria-label="ก่อนหน้า">‹</button><b>${P.label}</b><button data-off="1"${canNext?'':' disabled'} aria-label="ถัดไป">›</button></div>
+  ${nothing?'<div class="panel"><p class="empty">ยังไม่มีข้อมูลในช่วงนี้ กลับไปหน้าแรกแล้วเลือกส่วนที่เล่นเพื่อเริ่มจด</p></div>':`
+  <div class="stats">
+    ${sumKind==='day'?`<div class="stat"><span class="num">${w1?fmt(w1):'–'}</span><span>น้ำหนักตัว (กก.)</span></div>`:`<div class="stat"><span class="num">${active}</span><span>วันที่ออกกำลัง</span></div>`}
+    <div class="stat"><span class="num">${sumKind==='day'?nl:Object.keys(best).length}</span><span>${sumKind==='day'?'ท่าที่เล่น':'ท่าที่มีสถิติ'}</span></div>
+    <div class="stat"><span class="num">${fmt(tm)}</span><span>นาทีคาร์ดิโอ</span></div>
+    <div class="stat"><span class="num">${fmt(tk)}</span><span>kcal จากคาร์ดิโอ</span></div></div>
+  ${strength?`<div class="panel"><h2>เวทเทรนนิ่ง <span class="small muted" style="font-weight:400">สูงสุดในช่วงนี้ · ${cmp}</span></h2>${strength}</div>`:''}
+  ${cd.length?`<div class="panel"><h2>คาร์ดิโอ <span class="small muted" style="font-weight:400">${fmt(tm)} นาที · ${fmt(tk)} kcal</span></h2>${sumKind==='day'?'':barChart(bars,'นาที')}
+    <div class="list">${CARDIO.filter(c=>byType[c[0]]).map(c=>{const o=byType[c[0]];return `<div class="li">${pic(c[2],'cb')}<span class="nm">${c[1]}<small>${o.n} ครั้ง · ${fmt(o.min)} นาที</small></span><span class="val"><span class="num">${fmt(o.kcal)}</span><small class="muted">kcal</small></span></div>`}).join('')}</div></div>`:''}
+  ${wd.length?`<div class="panel"><h2>น้ำหนักตัว</h2><div class="kv"><span class="muted">ล่าสุด · ${dl(wd[wd.length-1])}</span><span class="num">${fmt(w1)} กก.</span></div>
+    ${wBase!==null?`<div class="kv"><span class="muted">${wd.length>1&&sumKind!=='day'?'เปลี่ยนแปลงในช่วงนี้':'เทียบกับครั้งก่อน'}</span><span class="num">${sign(w1-wBase)} กก.</span></div>`:''}
+    ${lineChart(wd.map(d=>({label:dl(d),v:state.weight[d]})),'กก.')}</div>`:''}`}`;
+}
+
+function render(){
+  const r=route();let html;const p=partOf(r);
+  if(p)html=vPart(p);
+  else if(r.startsWith('x-')&&exById(r.slice(2)))html=vEx(exById(r.slice(2)));
+  else if(r.startsWith('add-')&&partOf(r.slice(4)))html=vAdd(partOf(r.slice(4)));
+  else if(r==='cardio')html=vCardio();
+  else if(r==='bodyweight')html=vWeight();
+  else if(r==='summary')html=vSummary();
+  else html=vHome();
+  app.innerHTML=html;
+}
+window.addEventListener('hashchange',()=>{saved=null;armed=null;msg='';filter=route().startsWith('x-')||partOf(route())?filter:'all';render();window.scrollTo(0,0)});
+
+/* ---------- actions ---------- */
+const val=id=>{const el=document.getElementById(id);return el?num(el.value,100000):null};
+function arm(k,fn){if(armed===k){armed=null;fn()}else{armed=k;render()}}
+app.addEventListener('click',ev=>{
+  const b=ev.target.closest('button');if(!b||b.disabled)return;const d=b.dataset;
+  if(d.go!==undefined){if(d.go==='summary'){sumOff=0}go(d.go);return}
+  if(d.day){cur=d.day;render();return}
+  if(d.filter){filter=d.filter;render();return}
+  if(d.step){const el=document.getElementById('val'),v=Math.max(0,Math.round(((parseFloat(el.value)||0)+ +d.step)*100)/100);el.value=v;return}
+  if(d.kind){sumKind=d.kind;sumOff=0;render();return}
+  if(d.off){sumOff+= +d.off;render();return}
+  if(d.ctype){const m=document.getElementById('cmin').value,k=document.getElementById('ckcal').value;cardioType=d.ctype;render();document.getElementById('cmin').value=m;document.getElementById('ckcal').value=k;return}
+  if(d.eq||d.icon){addForm.name=document.getElementById('newname').value;if(d.eq){addForm.eq=d.eq;addForm.icon=''}else addForm.icon=d.icon;
+    const box=app.querySelector('.pick.icons'),st=box?box.scrollTop:0;render();const nb=app.querySelector('.pick.icons');if(nb)nb.scrollTop=st;return}
+  if(d.delc){arm('c'+d.delc,()=>{state.cardio[cur]=(state.cardio[cur]||[]).filter(e=>e.id!==d.delc);if(!state.cardio[cur].length)delete state.cardio[cur];touchDay(cur);render()});return}
+  if(d.delw){arm('w'+d.delw,()=>{delete state.weight[d.delw];touchDay(d.delw);render()});return}
+  const r=route(),ex=r.startsWith('x-')?exById(r.slice(2)):null;msg='';
+  switch(d.act){
+    case 'save-lift':{const v=val('val');if(v===null||v<=0){msg='ใส่ตัวเลขที่มากกว่า 0 ก่อนกดบันทึก';render();return}
+      (state.lifts[cur]=state.lifts[cur]||{})[ex.id]=v;touchDay(cur);saved=ex.id;armed=null;render();window.scrollTo(0,0);break}
+    case 'edit':saved=null;render();break;
+    case 'del-lift':arm('lift',()=>{delete state.lifts[cur][ex.id];if(!Object.keys(state.lifts[cur]).length)delete state.lifts[cur];touchDay(cur);render()});break;
+    case 'del-ex':arm('ex',()=>{ex.del=true;touch('cfg');go(ex.part)});break;
+    case 'save-ex':{const name=document.getElementById('newname').value.trim();addForm.name=name;if(!name){msg='ตั้งชื่อท่าก่อนกดเพิ่ม';render();return}
+      const e={id:uid(),part:addForm.part,name:name.slice(0,60),eq:addForm.eq,icon:addForm.icon||DEFICON[addForm.eq],unit:addForm.eq==='bw'?'rep':'kg'};
+      state.custom.push(e);addForm=null;touch('cfg');go('x-'+e.id);break}
+    case 'add-cardio':{const m=val('cmin'),k=val('ckcal');if(m===null||m<=0){msg='ใส่จำนวนนาทีก่อนกดเพิ่ม';render();return}
+      (state.cardio[cur]=state.cardio[cur]||[]).push({id:uid(),type:cardioType,min:m,kcal:k||0});touchDay(cur);render();break}
+    case 'finish':sumKind='day';sumOff=0;go('summary');break;
+    case 'save-weight':{const v=num(document.getElementById('val').value,700);if(!v){msg='ใส่น้ำหนักตัวเป็นกิโลกรัมก่อนกดบันทึก';render();return}
+      state.weight[cur]=v;touchDay(cur);render();break}
+    case 'backup':showBackup=!showBackup;armed=null;render();break;
+    case 'copy':{const ta=document.getElementById('bk');const done=()=>{msg='คัดลอกแล้ว';render()};
+      try{navigator.clipboard.writeText(ta.value).then(done,()=>{ta.select();msg='เลือกข้อความไว้แล้ว กดคัดลอกจากเมนูของเครื่อง';})}catch(e){ta.select()}break}
+    case 'import':{const txt=document.getElementById('bk').value;let obj;try{obj=JSON.parse(txt)}catch(e){msg='ข้อมูลที่วางอ่านไม่ได้ ตรวจว่าคัดลอกมาครบทั้งหมด';render();document.getElementById('bk').value=txt;return}
+      if(armed!=='import'){armed='import';render();document.getElementById('bk').value=txt;return}
+      armed=null;const old=Object.keys(state.t),s=sanState(obj);state.custom=s.custom;state.lifts=s.lifts;state.cardio=s.cardio;state.weight=s.weight;
+      const ks=new Set(old.concat(['cfg']));['lifts','cardio','weight'].forEach(n=>Object.keys(state[n]).forEach(dd=>ks.add('y'+dd.slice(0,4))));ks.forEach(touch);
+      msg='นำเข้าข้อมูลแล้ว';render();break}
+  }
+});
+app.addEventListener('change',ev=>{if(ev.target.id==='pickdate'&&RE_D.test(ev.target.value)&&ev.target.value<=today()){cur=ev.target.value;render()}});
+app.addEventListener('keydown',ev=>{if(ev.key!=='Enter'||ev.target.tagName!=='INPUT')return;const b=app.querySelector('[data-act^="save-"],[data-act="add-cardio"]');if(b){ev.preventDefault();b.click()}});
+app.addEventListener('focusin',ev=>{if(ev.target.classList&&ev.target.classList.contains('big'))ev.target.select()});
+
+render();initCloud();
+})();
+</script>
