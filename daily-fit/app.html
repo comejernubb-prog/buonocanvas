@@ -142,6 +142,12 @@ textarea.inp{padding:12px 14px;font-size:13px;min-height:120px;font-family:ui-mo
 .li .spark{width:64px;height:26px;flex:none}
 .x{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);flex:none;text-align:center;font-size:13px;color:var(--muted)}
 .x.arm{background:var(--down);color:var(--surface);border-color:var(--down)}
+.mv{width:46px;height:46px;border-radius:12px;background:var(--sunk);flex:none;text-align:center;font-size:17px}
+.mv[disabled]{opacity:.3;cursor:default}
+.mv:active{background:var(--accent-soft)}
+.li:has(.mv){gap:6px}
+.menu{flex-direction:row}
+.menu .btn{min-height:52px;font-size:15px}
 .up{color:var(--up)}.down{color:var(--down)}
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column}
@@ -268,7 +274,7 @@ const BASE=[
  ['decline-press','chest','Decline Press','fw','benchDecline'],['db-fly','chest','Dumbbell Fly','fw','flyDb'],
  ['pec-deck','chest','Pec Deck Fly','mc','pecDeck'],['cable-fly','chest','Cable Fly','cb','cableMid'],
  ['cable-low-chest','chest','Cable Fly อกล่าง','cb','cableHigh'],['cable-up-chest','chest','Cable Fly อกบน','cb','cableLow'],
- ['chest-dip','chest','Chest Dip','bw','dip','rep'],
+ ['chest-dip','chest','Chest Dip','bw','dip','rep'],['chest-dip-machine','chest','Chest Dip Machine','mc','dipMachine'],
  ['ohp','shoulder','Overhead Press','fw','ohpBar'],['db-shoulder-press','shoulder','Dumbbell Shoulder Press','fw','ohpDb'],
  ['machine-shoulder-press','shoulder','Machine Shoulder Press','mc','ohpMachine'],['side-lateral','shoulder','Side Lateral Raise','fw','lateral'],
  ['cable-lateral','shoulder','Cable Lateral Raise','cb','lateralCable'],['machine-lateral','shoulder','Machine Lateral Raise','mc','lateralMachine'],
@@ -302,28 +308,31 @@ const DEFICON={fw:'curlDb',mc:'machinePress',cb:'cableMid',bw:'pullup'};
 /* ---------- state & storage ---------- */
 const LS='dailyfit.v1';
 const RE_D=/^\d{4}-\d{2}-\d{2}$/,RE_ID=/^[a-z0-9-]{1,40}$/;
-let state={custom:[],lifts:{},cardio:{},weight:{},t:{}};
+const LOGS=['lifts','cardio','weight','reps'];
+let state={custom:[],order:{},lifts:{},cardio:{},weight:{},reps:{},t:{}};
 const num=(v,max)=>{v=typeof v==='string'?parseFloat(v.replace(',','.')):+v;return isFinite(v)&&v>=0&&v<=max?Math.round(v*100)/100:null};
 function sanCustom(a){const out=[];(Array.isArray(a)?a:[]).slice(0,300).forEach(c=>{
   if(!c||!RE_ID.test(c.id)||!PARTS.some(p=>p[0]===c.part)||!EQ[c.eq])return;
   out.push({id:c.id,part:c.part,name:String(c.name||'').slice(0,60)||'ท่าใหม่',eq:c.eq,icon:ICONS[c.icon]?c.icon:DEFICON[c.eq],unit:UNIT[c.unit]?c.unit:'kg',del:!!c.del});});return out}
-function sanLogs(src){const o={lifts:{},cardio:{},weight:{}};src=src||{};
+function sanOrder(src){const o={};PARTS.forEach(p=>{const a=src&&src[p[0]];if(Array.isArray(a))o[p[0]]=a.filter(i=>typeof i==='string'&&RE_ID.test(i)).slice(0,400)});return o}
+function sanLogs(src){const o={lifts:{},cardio:{},weight:{},reps:{}};src=src||{};
+  Object.keys(src.reps||{}).forEach(d=>{if(!RE_D.test(d))return;const day={};Object.keys(src.reps[d]||{}).forEach(id=>{const v=num(src.reps[d][id],10000);if(RE_ID.test(id)&&v)day[id]=Math.round(v)});if(Object.keys(day).length)o.reps[d]=day});
   Object.keys(src.lifts||{}).forEach(d=>{if(!RE_D.test(d))return;const day={};Object.keys(src.lifts[d]||{}).forEach(id=>{const v=num(src.lifts[d][id],100000);if(RE_ID.test(id)&&v!==null)day[id]=v});if(Object.keys(day).length)o.lifts[d]=day});
   Object.keys(src.cardio||{}).forEach(d=>{if(!RE_D.test(d)||!Array.isArray(src.cardio[d]))return;const arr=[];src.cardio[d].slice(0,50).forEach(e=>{const m=num(e&&e.min,3000),k=num(e&&e.kcal,100000);
     if(m===null||!CARDIO.some(c=>c[0]===e.type))return;arr.push({id:RE_ID.test(e.id)?e.id:uid(),type:e.type,min:m,kcal:k||0})});if(arr.length)o.cardio[d]=arr});
   Object.keys(src.weight||{}).forEach(d=>{const v=num(src.weight[d],700);if(RE_D.test(d)&&v)o.weight[d]=v});return o}
 function sanState(s){s=s||{};const l=sanLogs(s);const t={};Object.keys(s.t||{}).forEach(k=>{if(k==='cfg'||/^y\d{4}$/.test(k))t[k]=+s.t[k]||0});
-  return {custom:sanCustom(s.custom),lifts:l.lifts,cardio:l.cardio,weight:l.weight,t}}
+  return {custom:sanCustom(s.custom),order:sanOrder(s.order),lifts:l.lifts,cardio:l.cardio,weight:l.weight,reps:l.reps,t}}
 function uid(){return 'c'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36)}
 try{const raw=localStorage.getItem(LS);if(raw)state=sanState(JSON.parse(raw))}catch(e){}
 function saveLocal(){try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}}
 
 /* cloud copy (only inside a Claude artifact; elsewhere this stays null and data lives in this browser) */
 let cloud=null,syncState='local';const pending=new Set();let pushTimer=0;
-function slice(k){if(k==='cfg')return {custom:state.custom};const y=k.slice(1),o={lifts:{},cardio:{},weight:{}};
-  ['lifts','cardio','weight'].forEach(n=>Object.keys(state[n]).forEach(d=>{if(d.slice(0,4)===y)o[n][d]=state[n][d]}));return o}
-function applySlice(k,obj,t){if(k==='cfg')state.custom=sanCustom(obj.custom);else{const y=k.slice(1),l=sanLogs(obj);
-  ['lifts','cardio','weight'].forEach(n=>{Object.keys(state[n]).forEach(d=>{if(d.slice(0,4)===y)delete state[n][d]});
+function slice(k){if(k==='cfg')return {custom:state.custom,order:state.order};const y=k.slice(1),o={lifts:{},cardio:{},weight:{},reps:{}};
+  LOGS.forEach(n=>Object.keys(state[n]).forEach(d=>{if(d.slice(0,4)===y)o[n][d]=state[n][d]}));return o}
+function applySlice(k,obj,t){if(k==='cfg'){state.custom=sanCustom(obj.custom);state.order=sanOrder(obj.order)}else{const y=k.slice(1),l=sanLogs(obj);
+  LOGS.forEach(n=>{Object.keys(state[n]).forEach(d=>{if(d.slice(0,4)===y)delete state[n][d]});
     Object.keys(l[n]).forEach(d=>{if(d.slice(0,4)===y)state[n][d]=l[n][d]})})}state.t[k]=t}
 function setSync(s){syncState=s;const el=document.getElementById('sync');if(el)el.textContent=syncText()}
 function syncText(){return syncState==='synced'?'ซิงก์กับบัญชี Claude แล้ว':syncState==='saving'?'กำลังซิงก์…':syncState==='error'?'ซิงก์ไม่สำเร็จ ข้อมูลยังอยู่ในเครื่องนี้':'เก็บข้อมูลไว้ในเบราว์เซอร์นี้'}
@@ -361,7 +370,10 @@ function ago(k){const n=Math.round((parse(today())-parse(k))/864e5);return n<=0?
 const allEx=()=>BASE.concat(state.custom);
 const exById=id=>allEx().find(e=>e.id===id);
 const partOf=id=>PARTS.find(p=>p[0]===id);
-function hist(id){return Object.keys(state.lifts).filter(d=>state.lifts[d][id]!=null).sort().map(d=>({d,v:state.lifts[d][id]}))}
+function hist(id){return Object.keys(state.lifts).filter(d=>state.lifts[d][id]!=null).sort().map(d=>({d,v:state.lifts[d][id],r:(state.reps[d]||{})[id]||0}))}
+const wr=(v,u,r)=>fmt(v)+' '+u+(r?' × '+r:'');
+function partList(pid){const ord=state.order[pid]||[],ix=id=>{const i=ord.indexOf(id);return i<0?1e6:i};
+  return allEx().filter(e=>e.part===pid&&!e.del).map((e,i)=>[e,ix(e.id),i]).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(a=>a[0])}
 const eqBadge=e=>`<span class="badge eq-${e.eq}">${EQ[e.eq]}</span>`;
 const pic=(name,eq)=>`<span class="pic">${icon(name,eq)}</span>`;
 
@@ -389,7 +401,7 @@ function barChart(bars,unit){ // bars:[{label,v,show}]
   ${bars.map((b,i)=>{const h=b.v/mx*(Y1-Y0),cx=X0+w*(i+.5);return (b.v>0?`<rect x="${(cx-bw/2).toFixed(1)}" y="${(Y1-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(3,bw/2)}" fill="var(--cb)"/>`:'')+(b.show?`<text x="${cx.toFixed(1)}" y="110" text-anchor="middle">${esc(b.label)}</text>`:'')}).join('')}</svg>`}
 
 /* ---------- view state ---------- */
-let cur=today(),filter='all',saved=null,sumKind='week',sumOff=0,armed=null,addForm=null,cardioType='run',showBackup=false,msg='';
+let cur=today(),filter='all',saved=null,sumKind='week',sumOff=0,armed=null,addForm=null,cardioType='run',showBackup=false,msg='',menu=false,editing=false;
 const app=document.getElementById('app');
 const route=()=>location.hash.replace(/^#/,'');
 function go(h){if(route()===h)render();else location.hash=h}
@@ -416,47 +428,60 @@ function vHome(){
   </div>
   <div class="foot"><span id="sync">${syncText()}</span><button class="ghost" data-act="backup">สำรองข้อมูล</button></div>
   ${showBackup?`<div class="panel"><h2>สำรองและกู้คืนข้อมูล</h2><p class="small muted">คัดลอกข้อความนี้เก็บไว้ หรือวางข้อมูลสำรองแล้วกดนำเข้า การนำเข้าจะแทนที่ข้อมูลทั้งหมดในเครื่องนี้</p>
-    <textarea class="inp" id="bk" spellcheck="false">${esc(JSON.stringify({custom:state.custom,lifts:state.lifts,cardio:state.cardio,weight:state.weight}))}</textarea>
+    <textarea class="inp" id="bk" spellcheck="false">${esc(JSON.stringify({custom:state.custom,order:state.order,lifts:state.lifts,reps:state.reps,cardio:state.cardio,weight:state.weight}))}</textarea>
     <div class="row2"><button class="btn alt" data-act="copy">คัดลอก</button><button class="btn alt" data-act="import">${armed==='import'?'แตะอีกครั้งเพื่อแทนที่':'นำเข้า'}</button></div>${msg?`<p class="small">${esc(msg)}</p>`:''}</div>`:''}`;
 }
 
 function vPart(p){
-  const lifts=state.lifts[cur]||{};
-  const list=allEx().filter(e=>e.part===p[0]&&!e.del&&(filter==='all'||e.eq===filter));
+  const lifts=state.lifts[cur]||{},all=partList(p[0]);
+  const dots=`<button class="back" data-act="menu" aria-label="ตัวเลือก" aria-expanded="${menu}"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg></button>`;
+  if(editing)return `<header class="top">${backBtn('')}<h1>${p[1]}<small>จัดเรียงท่า ท่าที่เล่นบ่อยเลื่อนไว้บนสุด</small></h1></header>
+  <button class="btn" data-act="reorder-done">เสร็จ</button>
+  <div class="panel"><div class="list">${all.map((e,i)=>`<div class="li">${pic(e.icon,e.eq)}<span class="nm">${esc(e.name)}<small>${EQ[e.eq]}</small></span>
+    <button class="mv" data-move="top" data-id="${e.id}"${i?'':' disabled'} aria-label="ย้าย ${esc(e.name)} ไปบนสุด">⤒</button><button class="mv" data-move="up" data-id="${e.id}"${i?'':' disabled'} aria-label="เลื่อน ${esc(e.name)} ขึ้น">▲</button><button class="mv" data-move="down" data-id="${e.id}"${i<all.length-1?'':' disabled'} aria-label="เลื่อน ${esc(e.name)} ลง">▼</button></div>`).join('')}</div></div>
+  <button class="btn" data-act="reorder-done">เสร็จ</button>`;
+  const list=all.filter(e=>filter==='all'||e.eq===filter);
   const chips=[['all','ทั้งหมด']].concat(Object.entries(EQ)).map(([k,l])=>`<button class="chip${filter===k?' on':''}" data-filter="${k}">${l}</button>`).join('');
-  return `<header class="top">${backBtn('')}<h1>${p[1]}<small>เลือกท่าที่เล่น</small></h1></header>${dayNote()}
+  return `<header class="top">${backBtn('')}<h1>${p[1]}<small>เลือกท่าที่เล่น</small></h1>${dots}</header>${dayNote()}
+  ${menu?`<div class="panel menu"><button class="btn alt" data-act="reorder">แก้ไขลำดับท่า</button><button class="btn alt" data-go="add-${p[0]}">เพิ่มท่าใหม่</button></div>`:''}
   <div class="chips">${chips}</div>
   <div class="grid">${list.map(e=>{const h=hist(e.id),l=h[h.length-1];
-    return `<button class="tile ex" data-go="x-${e.id}">${pic(e.icon,e.eq)}<strong>${esc(e.name)}</strong>${eqBadge(e)}<span class="last">${l?fmt(l.v)+' <span class="small muted" style="font-family:var(--f-ui);font-weight:400">'+UNIT[e.unit]+'</span>':'<span class="small muted" style="font-family:var(--f-ui);font-weight:400">ยังไม่มีสถิติ</span>'}</span>${lifts[e.id]!=null?'<span class="done">✓</span>':''}</button>`}).join('')}
+    return `<button class="tile ex" data-go="x-${e.id}">${pic(e.icon,e.eq)}<strong>${esc(e.name)}</strong>${eqBadge(e)}<span class="last">${l?fmt(l.v)+' <span class="small muted" style="font-family:var(--f-ui);font-weight:400">'+UNIT[e.unit]+(l.r?' × '+l.r:'')+'</span>':'<span class="small muted" style="font-family:var(--f-ui);font-weight:400">ยังไม่มีสถิติ</span>'}</span>${lifts[e.id]!=null?'<span class="done">✓</span>':''}</button>`}).join('')}
     <button class="tile add" data-go="add-${p[0]}"><span>+</span>เพิ่มท่าใหม่</button></div>`;
 }
 
 function vEx(e){
-  const p=partOf(e.part),h=hist(e.id),tv=(state.lifts[cur]||{})[e.id];
+  const p=partOf(e.part),h=hist(e.id),tv=(state.lifts[cur]||{})[e.id],tr=(state.reps[cur]||{})[e.id]||0;
   const prev=h.filter(x=>x.d<cur).pop(),others=h.filter(x=>x.d!==cur),best=others.length?Math.max(...others.map(x=>x.v)):null;
   const u=UNIT[e.unit],steps=e.unit==='kg'?[-5,-2.5,2.5,5]:e.unit==='rep'?[-5,-1,1,5]:[-10,-5,5,10];
   const head=`<header class="top">${backBtn(p[0])}<h1>${esc(e.name)}<small>${p[1]} · ${EQ[e.eq]}</small></h1></header>${dayNote()}`;
   const chart=h.length>1?`<div class="panel"><h2>${h.length} ครั้งล่าสุด</h2>${lineChart(h.slice(-12).map(x=>({label:dl(x.d),v:x.v})),u)}</div>`.replace(h.length+' ครั้งล่าสุด',Math.min(12,h.length)+' ครั้งล่าสุด'):'';
   if(saved===e.id&&tv!=null){
     let d='';if(prev){const diff=tv-prev.v,pc=prev.v?diff/prev.v*100:0;
-      d=`<div class="delta ${diff>0?'up':diff<0?'down':'same'}">${diff>0?'▲':diff<0?'▼':'='} ${diff===0?'เท่าครั้งก่อน':sign(diff)+' '+u+(prev.v?` (${sign(pc).replace(/(\.\d)\d$/,'$1')}%)`:'')}</div>`}
+      if(diff===0&&tr&&prev.r&&tr!==prev.r)d=`<div class="delta ${tr>prev.r?'up':'down'}">${tr>prev.r?'▲':'▼'} ${sign(tr-prev.r)} ครั้ง ที่น้ำหนักเท่าเดิม</div>`;
+      else d=`<div class="delta ${diff>0?'up':diff<0?'down':'same'}">${diff>0?'▲':diff<0?'▼':'='} ${diff===0?'เท่าครั้งก่อน':sign(diff)+' '+u+(prev.v?` (${sign(pc).replace(/(\.\d)\d$/,'$1')}%)`:'')}</div>`}
     else d=`<div class="delta same">บันทึกครั้งแรก</div>`;
     return head+`<div class="panel result">${best!==null&&tv>best?'<span class="pr">สถิติใหม่</span>':''}
-      <span class="muted">${cur===today()?'วันนี้':dl(cur)}</span><div class="num today">${fmt(tv)} <span style="font-size:24px">${u}</span></div>${d}
-      <div class="vs"><div><span class="small muted">ครั้งก่อน${prev?' · '+dl(prev.d):''}</span><span class="num">${prev?fmt(prev.v)+' '+u:'–'}</span></div>
+      <span class="muted">${cur===today()?'วันนี้':dl(cur)}</span><div class="num today">${fmt(tv)} <span style="font-size:24px">${u}</span></div>${tr?`<div class="num" style="font-size:30px;line-height:1">× ${tr} ครั้ง</div>`:''}${d}
+      <div class="vs"><div><span class="small muted">ครั้งก่อน${prev?' · '+dl(prev.d):''}</span><span class="num">${prev?wr(prev.v,u,prev.r):'–'}</span></div>
       <div><span class="small muted">สูงสุดที่เคยทำ</span><span class="num">${fmt(Math.max(tv,best===null?0:best))} ${u}</span></div></div></div>
       ${chart}<button class="btn" data-go="${p[0]}">ท่าต่อไป</button>
       <div class="row2"><button class="btn alt" data-act="edit">แก้ไข</button><button class="btn alt" data-go="">หน้าแรก</button></div>`;
   }
   const start=tv!=null?tv:prev?prev.v:'';
   return head+`<div class="panel"><div class="hero">${pic(e.icon,e.eq)}<div class="info">${eqBadge(e)}
-      <div class="kv"><span class="muted">ครั้งก่อน${prev?' · '+ago(prev.d):''}</span><span class="num">${prev?fmt(prev.v)+' '+u:'–'}</span></div>
+      <div class="kv"><span class="muted">ครั้งก่อน${prev?' · '+ago(prev.d):''}</span><span class="num">${prev?wr(prev.v,u,prev.r):'–'}</span></div>
       <div class="kv"><span class="muted">สูงสุด</span><span class="num">${best!==null?fmt(best)+' '+u:'–'}</span></div></div></div></div>
     <div class="panel"><h2>${e.unit==='kg'?'น้ำหนักมากสุดที่ยกได้':e.unit==='rep'?'จำนวนครั้งมากสุด':'นานสุดกี่วินาที'}${cur===today()?'วันนี้':''}</h2>
       <div class="entry"><button class="step far" data-step="${steps[0]}">${sign(steps[0])}</button><button class="step" data-step="${steps[1]}">${sign(steps[1])}</button>
         <input class="big" id="val" type="number" inputmode="decimal" step="any" min="0" value="${start}" placeholder="0" aria-label="${u}">
         <button class="step" data-step="${steps[2]}">${sign(steps[2])}</button><button class="step far" data-step="${steps[3]}">${sign(steps[3])}</button></div>
-      <div class="unit">${u}</div>${msg?`<p class="err">${esc(msg)}</p>`:''}
+      <div class="unit">${u}</div>
+      ${e.unit==='kg'?`<h2>ยกได้กี่ครั้ง <span class="small muted" style="font-weight:400">ไม่ใส่ก็ได้</span></h2>
+      <div class="entry two"><button class="step" data-step="-1" data-for="reps">−1</button>
+        <input class="big" id="reps" type="number" inputmode="numeric" step="1" min="0" value="${tr||''}" placeholder="${prev&&prev.r?prev.r:'0'}" aria-label="จำนวนครั้ง">
+        <button class="step" data-step="1" data-for="reps">+1</button></div><div class="unit">ครั้ง</div>`:''}
+      ${msg?`<p class="err">${esc(msg)}</p>`:''}
       <button class="btn" data-act="save-lift">บันทึก</button>
       ${tv!=null?`<button class="btn danger" data-act="del-lift">${armed==='lift'?'แตะอีกครั้งเพื่อลบ':'ลบที่บันทึกไว้ของวันนี้'}</button>`:''}</div>
     ${chart}${state.custom.includes(e)?`<button class="btn danger" data-act="del-ex">${armed==='ex'?'แตะอีกครั้งเพื่อลบท่านี้':'ลบท่านี้ออกจากรายการ'}</button>`:''}`;
@@ -514,8 +539,8 @@ function period(kind,off){
 function vSummary(){
   const P=period(sumKind,sumOff),Q=sumKind==='day'?null:period(sumKind,sumOff-1),inP=d=>d>=P.a&&d<=P.b;
   const ld=Object.keys(state.lifts).filter(inP).sort(),cd=Object.keys(state.cardio).filter(inP).sort(),wd=Object.keys(state.weight).filter(inP).sort();
-  const active=new Set(ld.concat(cd)).size;let nl=0;const best={};
-  ld.forEach(d=>Object.keys(state.lifts[d]).forEach(id=>{nl++;(best[id]=best[id]||[]).push(state.lifts[d][id])}));
+  const active=new Set(ld.concat(cd)).size;let nl=0;const best={},bestR={};
+  ld.forEach(d=>Object.keys(state.lifts[d]).forEach(id=>{nl++;const v=state.lifts[d][id];if(!best[id]||v>=Math.max(...best[id]))bestR[id]=(state.reps[d]||{})[id]||0;(best[id]=best[id]||[]).push(v)}));
   let tm=0,tk=0;const byType={};cd.forEach(d=>state.cardio[d].forEach(e=>{tm+=e.min;tk+=e.kcal;const o=byType[e.type]=byType[e.type]||{n:0,min:0,kcal:0};o.n++;o.min+=e.min;o.kcal+=e.kcal}));
   const tabs=[['day','วัน'],['week','สัปดาห์'],['month','เดือน'],['year','ปี']].map(([k,l])=>`<button class="${sumKind===k?'on':''}" data-kind="${k}">${l}</button>`).join('');
   const canNext=sumKind==='day'?key(addDays(parse(cur),sumOff))<today():sumOff<0;
@@ -524,7 +549,7 @@ function vSummary(){
       if(Q){Object.keys(state.lifts).forEach(d=>{if(d>=Q.a&&d<=Q.b&&state.lifts[d][e.id]!=null)pv=Math.max(pv===null?0:pv,state.lifts[d][e.id])})}
       else{const h=hist(e.id).filter(x=>x.d<P.a).pop();if(h)pv=h.v}
       const diff=pv===null?null:mx-pv;
-      return `<div class="li">${pic(e.icon,e.eq)}<span class="nm">${esc(e.name)}<small>${vals.length>1?vals.length+' ครั้ง':EQ[e.eq]}</small></span>${spark(vals)}<span class="val"><span class="num">${fmt(mx)} ${u}</span><small class="${diff>0?'up':diff<0?'down':'muted'}">${diff===null?'ครั้งแรก':diff===0?'เท่าเดิม':(diff>0?'▲ ':'▼ ')+sign(diff)}</small></span></div>`});
+      return `<div class="li">${pic(e.icon,e.eq)}<span class="nm">${esc(e.name)}<small>${vals.length>1?'จด '+vals.length+' วัน':EQ[e.eq]}${bestR[e.id]?' · × '+bestR[e.id]+' ครั้ง':''}</small></span>${spark(vals)}<span class="val"><span class="num">${fmt(mx)} ${u}</span><small class="${diff>0?'up':diff<0?'down':'muted'}">${diff===null?'ครั้งแรก':diff===0?'เท่าเดิม':(diff>0?'▲ ':'▼ ')+sign(diff)}</small></span></div>`});
     if(rows.length)strength+=`<div class="sec">${p[1]}</div><div class="list">${rows.join('')}</div>`});
   const cmp=sumKind==='day'?'เทียบกับครั้งก่อน':sumKind==='week'?'เทียบกับสัปดาห์ก่อน':sumKind==='month'?'เทียบกับเดือนก่อน':'เทียบกับปีก่อน';
   const bars=P.buckets.map(b=>({label:b.label,show:b.show,v:cd.filter(d=>d>=b.a&&d<=b.b).reduce((s,d)=>s+state.cardio[d].reduce((x,e)=>x+e.min,0),0)}));
@@ -559,7 +584,7 @@ function render(){
   else html=vHome();
   app.innerHTML=html;
 }
-window.addEventListener('hashchange',()=>{saved=null;armed=null;msg='';filter=route().startsWith('x-')||partOf(route())?filter:'all';render();window.scrollTo(0,0)});
+window.addEventListener('hashchange',()=>{saved=null;armed=null;msg='';menu=false;editing=false;filter=route().startsWith('x-')||partOf(route())?filter:'all';render();window.scrollTo(0,0)});
 
 /* ---------- actions ---------- */
 const val=id=>{const el=document.getElementById(id);return el?num(el.value,100000):null};
@@ -569,7 +594,8 @@ app.addEventListener('click',ev=>{
   if(d.go!==undefined){if(d.go==='summary'){sumOff=0}go(d.go);return}
   if(d.day){cur=d.day;render();return}
   if(d.filter){filter=d.filter;render();return}
-  if(d.step){const el=document.getElementById('val'),v=Math.max(0,Math.round(((parseFloat(el.value)||0)+ +d.step)*100)/100);el.value=v;return}
+  if(d.move){const pid=route(),ids=partList(pid).map(e=>e.id),i=ids.indexOf(d.id);if(i<0)return;ids.splice(i,1);ids.splice(d.move==='top'?0:d.move==='up'?Math.max(0,i-1):i+1,0,d.id);state.order[pid]=ids;touch('cfg');render();return}
+  if(d.step){const el=document.getElementById(d.for||'val'),v=Math.max(0,Math.round(((parseFloat(el.value)||0)+ +d.step)*100)/100);el.value=v;return}
   if(d.kind){sumKind=d.kind;sumOff=0;render();return}
   if(d.off){sumOff+= +d.off;render();return}
   if(d.ctype){const m=document.getElementById('cmin').value,k=document.getElementById('ckcal').value;cardioType=d.ctype;render();document.getElementById('cmin').value=m;document.getElementById('ckcal').value=k;return}
@@ -580,9 +606,13 @@ app.addEventListener('click',ev=>{
   const r=route(),ex=r.startsWith('x-')?exById(r.slice(2)):null;msg='';
   switch(d.act){
     case 'save-lift':{const v=val('val');if(v===null||v<=0){msg='ใส่ตัวเลขที่มากกว่า 0 ก่อนกดบันทึก';render();return}
-      (state.lifts[cur]=state.lifts[cur]||{})[ex.id]=v;touchDay(cur);saved=ex.id;armed=null;render();window.scrollTo(0,0);break}
+      const rp=ex.unit==='kg'?val('reps'):null;(state.lifts[cur]=state.lifts[cur]||{})[ex.id]=v;
+      if(rp)(state.reps[cur]=state.reps[cur]||{})[ex.id]=Math.round(rp);else if(state.reps[cur])delete state.reps[cur][ex.id];touchDay(cur);saved=ex.id;armed=null;render();window.scrollTo(0,0);break}
     case 'edit':saved=null;render();break;
-    case 'del-lift':arm('lift',()=>{delete state.lifts[cur][ex.id];if(!Object.keys(state.lifts[cur]).length)delete state.lifts[cur];touchDay(cur);render()});break;
+    case 'menu':menu=!menu;render();break;
+    case 'reorder':menu=false;editing=true;filter='all';render();window.scrollTo(0,0);break;
+    case 'reorder-done':editing=false;render();window.scrollTo(0,0);break;
+    case 'del-lift':arm('lift',()=>{delete state.lifts[cur][ex.id];if(state.reps[cur])delete state.reps[cur][ex.id];if(!Object.keys(state.lifts[cur]).length)delete state.lifts[cur];touchDay(cur);render()});break;
     case 'del-ex':arm('ex',()=>{ex.del=true;touch('cfg');go(ex.part)});break;
     case 'save-ex':{const name=document.getElementById('newname').value.trim();addForm.name=name;if(!name){msg='ตั้งชื่อท่าก่อนกดเพิ่ม';render();return}
       const e={id:uid(),part:addForm.part,name:name.slice(0,60),eq:addForm.eq,icon:addForm.icon||DEFICON[addForm.eq],unit:addForm.eq==='bw'?'rep':'kg'};
@@ -597,8 +627,8 @@ app.addEventListener('click',ev=>{
       try{navigator.clipboard.writeText(ta.value).then(done,()=>{ta.select();msg='เลือกข้อความไว้แล้ว กดคัดลอกจากเมนูของเครื่อง';})}catch(e){ta.select()}break}
     case 'import':{const txt=document.getElementById('bk').value;let obj;try{obj=JSON.parse(txt)}catch(e){msg='ข้อมูลที่วางอ่านไม่ได้ ตรวจว่าคัดลอกมาครบทั้งหมด';render();document.getElementById('bk').value=txt;return}
       if(armed!=='import'){armed='import';render();document.getElementById('bk').value=txt;return}
-      armed=null;const old=Object.keys(state.t),s=sanState(obj);state.custom=s.custom;state.lifts=s.lifts;state.cardio=s.cardio;state.weight=s.weight;
-      const ks=new Set(old.concat(['cfg']));['lifts','cardio','weight'].forEach(n=>Object.keys(state[n]).forEach(dd=>ks.add('y'+dd.slice(0,4))));ks.forEach(touch);
+      armed=null;const old=Object.keys(state.t),s=sanState(obj);state.custom=s.custom;state.order=s.order;state.reps=s.reps;state.lifts=s.lifts;state.cardio=s.cardio;state.weight=s.weight;
+      const ks=new Set(old.concat(['cfg']));LOGS.forEach(n=>Object.keys(state[n]).forEach(dd=>ks.add('y'+dd.slice(0,4))));ks.forEach(touch);
       msg='นำเข้าข้อมูลแล้ว';render();break}
   }
 });
