@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 COPY server.mjs index.html pdf-vector.js v13-core.js backup-utils.mjs ./
+COPY daily-fit ./daily-fit
 COPY tests ./tests
 RUN npm test && npm test
 ENV NODE_ENV=production

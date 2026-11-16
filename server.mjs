@@ -59,7 +59,7 @@ function sameOrigin(req){try{const origin=req.headers.origin;if(!origin)return f
 const attempts=new Map();
 // Static files are compressed once at startup (index.html is ~380 KB; brotli cuts it to a fraction),
 // so first load and every reload on a phone/iPad connection is much lighter.
-function prepareStatic(file){const raw=readFileSync(new URL(file,import.meta.url));
+function prepareStatic(file,wrap){let raw=readFileSync(new URL(file,import.meta.url));if(wrap)raw=wrap(raw);
   return {raw,etag:'"'+createHash('sha1').update(raw).digest('base64url').slice(0,20)+'"',
     br:brotliCompressSync(raw,{params:{[zc.BROTLI_PARAM_QUALITY]:9}}),gz:gzipSync(raw,{level:9})};}
 function sendStatic(req,res,asset,type,extra={}){
@@ -73,6 +73,8 @@ function sendStatic(req,res,asset,type,extra={}){
 const htmlAsset=prepareStatic('./index.html');
 const pdfAsset=prepareStatic('./pdf-vector.js');
 const v13Asset=prepareStatic('./v13-core.js');
+// Daily Fit (workout tracker) is a self-contained page fragment; wrap it in a document shell once at startup.
+const fitAsset=prepareStatic('./daily-fit/app.html',raw=>Buffer.concat([Buffer.from('<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body{margin:0}[hidden]{display:none!important}</style></head><body>'),raw,Buffer.from('</body></html>')]));
  // Same-origin, bundled Prompt font files: no Google Fonts/CDN dependency on Windows, macOS or iPad.
  const promptWeights=[300,400,500,600,700,800],fontFileMap=new Map(),fontCssRules=[];
  const promptRanges={latin:'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD',thai:'U+0E00-0E7F,U+200C-200D,U+25CC'};
@@ -105,6 +107,9 @@ async function handle(req,res){
     const headers={'Content-Type':'font/woff2','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'*','ETag':etag};
     if(req.headers['if-none-match']===etag){res.writeHead(304,headers);res.end();return;}
     res.writeHead(200,{...headers,'Content-Length':bytes.length});res.end(req.method==='HEAD'?undefined:bytes);return;
+  }
+  if((path==='/daily-fit'||path==='/daily-fit/')&&(req.method==='GET'||req.method==='HEAD')){
+    sendStatic(req,res,fitAsset,'text/html; charset=utf-8',{'Referrer-Policy':'strict-origin-when-cross-origin'});return;
   }
   if(path==='/v13-core.js'&&(req.method==='GET'||req.method==='HEAD')){
     sendStatic(req,res,v13Asset,'text/javascript; charset=utf-8');return;
