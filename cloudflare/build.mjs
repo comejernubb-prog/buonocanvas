@@ -1,11 +1,13 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 
+import { releaseVersion } from './release.mjs';
+
 const directory = 'cloudflare/public';
 await mkdir(directory + '/fonts', {recursive:true});
 for (const file of ['pdf-vector.js', 'v13-core.js']) await copyFile(file, directory + '/' + file);
 const html = await readFile('index.html','utf8');
 const cloudHtml = html
-  .replace(/(<span class="build-version"[^>]*>)[^<]*/, '$1CF 1')
+  .replace(/(<span class="build-version"[^>]*>)[^<]*/, (_, tag) => tag + releaseVersion)
   .replace('Download Full Backup (.tar.gz) — boards + original images', 'Download board data (.json)')
   .replace('Preparing full backup including original photos', 'Downloading board data')
   .replace(/^.*cloudIndicator.*Sign out.*\n/m, '');

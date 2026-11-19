@@ -25,6 +25,7 @@ const stmt = {
   listBoards:db.prepare('SELECT id,name,background,grid,revision,updated_at FROM boards WHERE deleted=0 ORDER BY created_at ASC'),
   board:db.prepare('SELECT * FROM boards WHERE id=?'),
   allElements:db.prepare('SELECT id,content,revision FROM elements WHERE board_id=? AND deleted=0 ORDER BY rowid ASC'),
+  deletedElements:db.prepare('SELECT id,revision FROM elements WHERE board_id=? AND deleted=1'),
   element:db.prepare('SELECT * FROM elements WHERE board_id=? AND id=?'),
   newBoard:db.prepare('INSERT INTO boards (id,name,background,grid,revision,deleted,created_at,updated_at) VALUES (?,?,?,?,1,0,?,?)'),
   updateBoard:db.prepare('UPDATE boards SET name=?, background=?, grid=?, revision=revision+1, updated_at=? WHERE id=?'),
@@ -188,7 +189,7 @@ function broadcast(data,except=null){for(const c of clients)if(c!==except)socket
 function closeClient(c){if(!c.alive)return;c.alive=false;clients.delete(c);connectionStats.closed++;const freed=new Map();for(const [key,v] of locks)if(v.actor===c.actor){locks.delete(key);const at=key.indexOf(':'),board=key.slice(0,at),list=freed.get(board)||[];list.push(key.slice(at+1));freed.set(board,list);}for(const [boardId,ids] of freed)broadcast({type:'unlock',boardId,ids,actor:c.actor});broadcast({type:'presence',users:[...clients].map(x=>({id:x.actor,name:x.name}))});}
 const idOK=x=>typeof x==='string'&&x.length>=1&&x.length<=100&&/^[a-zA-Z0-9_-]+$/.test(x);
 const metaValid=m=>m&&typeof m==='object'&&typeof m.name==='string'&&m.name.length<=220&&typeof m.background==='string'&&m.background.length<=60&&typeof m.grid==='boolean';
-function boardData(id){const b=stmt.board.get(id);if(!b||b.deleted)return null;return {id:b.id,name:b.name,background:b.background,grid:!!b.grid,revision:b.revision,updatedAt:b.updated_at,elements:stmt.allElements.all(id).flatMap(e=>{try{return [{...JSON.parse(e.content),_rev:e.revision}];}catch{console.error('Skipping unreadable element',id,e.id);return [];}})};}
+function boardData(id){const b=stmt.board.get(id);if(!b||b.deleted)return null;return {id:b.id,name:b.name,background:b.background,grid:!!b.grid,revision:b.revision,updatedAt:b.updated_at,deletedRevisions:Object.fromEntries(stmt.deletedElements.all(id).map(e=>[e.id,e.revision])),elements:stmt.allElements.all(id).flatMap(e=>{try{return [{...JSON.parse(e.content),_rev:e.revision}];}catch{console.error('Skipping unreadable element',id,e.id);return [];}})};}
 function allBoards(){return stmt.listBoards.all().map(b=>boardData(b.id));}
 function lockKey(b,id){return `${b}:${id}`;}
 function lockState(key){const v=locks.get(key);if(!v)return null;if(v.expires<now()){locks.delete(key);return null;}return v;}
@@ -201,17 +202,17 @@ function handlePatch(c,msg){const id=msg.boardId,reqId=msg.reqId,ops=Array.isArr
   if(!idOK(id)||ops.length>300||!Number.isInteger(msg.baseMetaRev)&&msg.meta){socketSend(c,{type:'error',message:'Invalid edit request',reqId});return;}
   const b=stmt.board.get(id);if(!b||b.deleted){socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Canvas not found',snapshot:null});return;}
   if(msg.meta&&(!metaValid(msg.meta)||b.revision!==msg.baseMetaRev)){
-    socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Canvas settings changed on another device',snapshot:boardData(id)});return;
+    socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Canvas settings changed on another device',conflictMeta:true,snapshot:boardData(id)});return;
   }
   let results=[],ids=[];
   for(const op of ops){if(!op||!idOK(op.id)||!Number.isInteger(op.baseRev)||op.baseRev<0){socketSend(c,{type:'error',reqId,message:'Invalid object revision'});return;}
     const existing=stmt.element.get(id,op.id),realRev=existing?.revision||0;
-    if(realRev!==op.baseRev){socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Another device edited the same object',snapshot:boardData(id)});return;}
+    if(realRev!==op.baseRev){socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Another device edited the same object',conflictIds:[op.id],snapshot:boardData(id)});return;}
     if(op.value!==null){if(!op.value||typeof op.value!=='object'||op.value.id!==op.id){socketSend(c,{type:'error',reqId,message:'Invalid element'});return;}
       const size=Buffer.byteLength(JSON.stringify(op.value));if(size>8*1024*1024){socketSend(c,{type:'error',reqId,message:'Image or element too large (8 MB max)'});return;}}
     ids.push(op.id);results.push({id:op.id,baseRev:realRev,value:op.value,rev:realRev+1});
   }
-  if(!allowed(c,id,ids)){socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Object is being edited by someone else',snapshot:boardData(id)});return;}
+  if(!allowed(c,id,ids)){socketSend(c,{type:'rejected',boardId:id,reqId,reason:'Object is being edited by someone else',conflictIds:ids.filter(objectId=>!allowed(c,id,[objectId])),snapshot:boardData(id)});return;}
   const stamp=now();
   try{db.exec('BEGIN IMMEDIATE');
     if(msg.meta)stmt.updateBoard.run(msg.meta.name,msg.meta.background,msg.meta.grid?1:0,stamp,id);
@@ -228,7 +229,7 @@ function handleCreate(c,msg){const d=msg.board;if(!d||!idOK(d.id)||!metaValid(d)
   const ev={type:'boardCreated',reqId:msg.reqId,sender:c.actor,board:{id:d.id,name:d.name,background:d.background,grid:d.grid,revision:1,updatedAt:stamp,elements:[]}};broadcast(ev);
 }
 function handleDelete(c,msg){const b=stmt.board.get(msg.boardId);if(!b||b.deleted){socketSend(c,{type:'rejected',reqId:msg.reqId,reason:'Already deleted',snapshot:null});return;}
-  if(b.revision!==msg.baseRev){socketSend(c,{type:'rejected',reqId:msg.reqId,reason:'Canvas changed elsewhere',snapshot:boardData(b.id)});return;}
+  if(b.revision!==msg.baseRev){socketSend(c,{type:'rejected',reqId:msg.reqId,boardId:msg.boardId,reason:'Canvas changed elsewhere',snapshot:boardData(b.id)});return;}
   stmt.deleteBoard.run(now(),msg.boardId);broadcast({type:'boardDeleted',reqId:msg.reqId,sender:c.actor,boardId:msg.boardId});
 }
 function wsMessage(c,raw){let msg;try{msg=JSON.parse(raw);}catch{return;}if(!msg||typeof msg!=='object')return;
