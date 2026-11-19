@@ -1,0 +1,17 @@
+{
+  "name": "buonocanvas",
+  "main": "cloudflare/workspace.mjs",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./cloudflare/public",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [
+      {"name": "WORKSPACE", "class_name": "CanvasWorkspace"},
+      {"name": "IMAGES", "class_name": "CanvasImage"}
+    ]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["CanvasWorkspace", "CanvasImage"]}]
+}
