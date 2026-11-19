@@ -117,6 +117,48 @@ try{
  await until(()=>countIs(2),'cancelled pencil input leaves no stroke');
  await evaluate("document.querySelector('#tool-redo').click();true");
  assert.ok((await until(()=>strokeOp(5),'redo after acknowledged deletion')).value);
+ await evaluate(`document.querySelector('#tool-text-block').click();
+  testPointer('pointerdown',31,'mouse',190,170);testPointer('pointerup',31,'mouse',190,170);true`);
+ await until(()=>evaluate("document.querySelector('[data-rich-editor]')?.getAttribute('aria-label')==='หัวข้อ'"),'Text Block title editor');
+ await evaluate(`document.execCommand('insertText',false,'Palette title');
+  const title=document.querySelector('[data-rich-editor]');
+  title.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));
+  document.execCommand('insertText',false,'Palette body');
+  document.querySelector('[data-rich-editor]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}));
+  document.querySelector('#inspectorToggle').click();true`);
+ const palette=['#ffc926','#f3e8cc','#f96015','#d52518','#18542a','#9abc05'];
+ await until(()=>evaluate(`${JSON.stringify(palette)}.every(color=>document.querySelector('[data-style="blockHeaderColor"][data-value="'+color+'"]'))`),'all six header palette colors');
+ await evaluate(`(() => {
+  const choose=(target,value)=>{
+   const input=document.querySelector('[data-color-target="'+target+'"]');
+   input.value=value;input.dispatchEvent(new Event('change',{bubbles:true}));
+  };
+  document.querySelector('[data-style="blockHeaderColor"][data-value="#ffc926"]').click();
+  choose('blockTitleColor','#303a60');
+  choose('blockBodyColor','#204030');
+  choose('blockHeaderColor','#aabbcc');
+  return true;
+ })()`);
+ await until(()=>evaluate(`testMessages.flatMap(m=>m.ops||[]).some(({value})=>value?.blockHeaderColor==='#aabbcc'&&
+  value.blockTextStyles.title.stroke==='#303a60'&&value.blockTextStyles.body.stroke==='#204030')`),'custom header, title and body colors sync independently');
+ assert.ok(await evaluate("!!document.querySelector('#elLayer [fill=\"#aabbcc\"]') || !!document.querySelector('#drawing [fill=\"#aabbcc\"]')"));
+ await evaluate(`document.querySelector('#tool-text').click();
+  testPointer('pointerdown',32,'mouse',550,240);testPointer('pointerup',32,'mouse',550,240);true`);
+ await until(()=>evaluate("document.querySelector('[data-rich-editor]')?.getAttribute('aria-label')==='Text'"),'plain text editor');
+ await evaluate(`(() => {
+  const field=document.querySelector('[data-rich-editor]');
+  document.execCommand('insertText',false,'Custom text');
+  const range=document.createRange();
+  range.setStart(field.firstChild,0);range.setEnd(field.firstChild,6);
+  getSelection().removeAllRanges();getSelection().addRange(range);
+  const input=document.querySelector('#textCustomColor');
+  input.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));input.focus();
+  input.value='#314159';input.dispatchEvent(new Event('change',{bubbles:true}));
+  field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}));
+  return true;
+ })()`);
+ await until(()=>evaluate(`testMessages.flatMap(m=>m.ops||[]).some(({value})=>value?.type==='text'&&
+  value.richText?.body?.some(run=>run.stroke==='#314159'&&run.start===0&&run.end===6))`),'custom color applied to selected characters');
  await evaluate('testPeer.close();true');
- console.log('Headless Chrome passed: login, WebSocket, original PNG upload, non-destructive crop, editable PNG roundtrip, pen and palm input, two-client sync, and undo/redo across reconnect.');
+ console.log('Headless Chrome passed: login, WebSocket, original PNG upload, non-destructive crop, editable PNG roundtrip, pen and palm input, two-client sync, and undo/redo across reconnect, and preset and custom colors.');
 } finally {try{ws?.close();}catch{}app?.kill('SIGTERM');chrome.kill('SIGTERM');await pause(200);rmSync(dir,{recursive:true,force:true});}
